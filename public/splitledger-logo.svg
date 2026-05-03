@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 64" role="img" aria-labelledby="title desc">
+  <title id="title">SplitLedger</title>
+  <desc id="desc">SplitLedger logo for shared business and private personal expenses.</desc>
+  <rect width="224" height="64" rx="14" fill="#F8FAFB"/>
+  <g>
+    <rect x="12" y="12" width="40" height="40" rx="10" fill="#1F2937"/>
+    <path d="M21 22h10v20H21V22Z" fill="#2F6FED"/>
+    <path d="M35 22h8v20h-8V22Z" fill="#24A66A"/>
+    <path d="M21 23h22" stroke="#F8FAFB" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M21 32h22" stroke="#F8FAFB" stroke-width="2.6" stroke-linecap="round" opacity=".85"/>
+    <path d="M21 41h22" stroke="#F8FAFB" stroke-width="2.6" stroke-linecap="round" opacity=".72"/>
+  </g>
+  <text x="64" y="30" fill="#1F2937" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif" font-size="20" font-weight="700">SplitLedger</text>
+  <text x="65" y="45" fill="#6B7280" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif" font-size="10" font-weight="600" letter-spacing=".8">SHARED LEDGER</text>
+</svg>
