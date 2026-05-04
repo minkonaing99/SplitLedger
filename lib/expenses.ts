@@ -10,12 +10,38 @@ const compactCurrencyFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact"
 })
 
+const shortMonthNames = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec"
+]
+
 export function formatCurrency(amount: number): string {
   return `${currencyFormatter.format(amount)} Ks`
 }
 
 export function formatCompactCurrency(amount: number): string {
   return `${compactCurrencyFormatter.format(amount)} Ks`
+}
+
+export function formatDisplayDate(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-")
+  const monthIndex = Number(month) - 1
+
+  if (!year || !day || monthIndex < 0 || monthIndex >= shortMonthNames.length) {
+    return dateKey
+  }
+
+  return `${day}-${shortMonthNames[monthIndex]}-${year.slice(-2)}`
 }
 
 export function createExpense(input: ExpenseInput): Expense {

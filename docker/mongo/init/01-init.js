@@ -1,15 +1,20 @@
-const database = db.getSiblingDB("splitledger")
+const databaseName = process.env.MONGO_INITDB_DATABASE || "splitledger"
+const appUsername = process.env.MONGO_APP_USERNAME
+const appPassword = process.env.MONGO_APP_PASSWORD
+const database = db.getSiblingDB(databaseName)
 
-database.createUser({
-  user: "splitledger",
-  pwd: "splitledger",
-  roles: [
-    {
-      role: "readWrite",
-      db: "splitledger"
-    }
-  ]
-})
+if (appUsername && appPassword) {
+  database.createUser({
+    user: appUsername,
+    pwd: appPassword,
+    roles: [
+      {
+        role: "readWrite",
+        db: databaseName
+      }
+    ]
+  })
+}
 
 database.createCollection("expenses", {
   validator: {
@@ -68,8 +73,13 @@ database.createCollection("expenses", {
 })
 
 database.expenses.createIndex({ workspaceId: 1, type: 1, date: -1 })
+database.expenses.createIndex({ workspaceId: 1, type: 1, kind: 1, date: -1 })
 database.expenses.createIndex({ workspaceId: 1, ownerUserId: 1, type: 1, date: -1 })
 database.expenses.createIndex({ id: 1 }, { unique: true })
+
+database.createCollection("expenseAudits")
+database.expenseAudits.createIndex({ workspaceId: 1, expenseId: 1, createdAt: -1 })
+database.expenseAudits.createIndex({ workspaceId: 1, actorUserId: 1, createdAt: -1 })
 
 database.createCollection("users")
 database.users.createIndex({ id: 1 }, { unique: true })

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { insertExpense, listVisibleExpenses } from "@/lib/server/expense-repository"
 import { requireCurrentUser } from "@/lib/server/api"
+import { validateTrustedOrigin } from "@/lib/server/security"
 import type { ExpenseType, TransactionKind } from "@/lib/types"
 
 export async function GET() {
@@ -15,6 +16,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const originError = validateTrustedOrigin(request)
+
+  if (originError) {
+    return originError
+  }
+
   const auth = await requireCurrentUser()
 
   if (!auth.ok) {

@@ -7,12 +7,6 @@ export interface User {
   email: string
 }
 
-export interface DemoCredential {
-  userId: string
-  email: string
-  password: string
-}
-
 export interface Expense {
   id: string
   type: ExpenseType

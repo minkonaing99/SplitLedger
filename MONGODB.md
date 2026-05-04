@@ -1,21 +1,32 @@
 # SplitLedger MongoDB Setup
 
+## Environment
+
+Create `.env.local` from `.env.example` and replace every `replace-with-*` value before starting MongoDB.
+
+Important values:
+
+```bash
+APP_ORIGIN=http://localhost:3000
+MONGODB_DB=splitledger
+MONGODB_URI=mongodb://splitledger_app:replace-with-strong-app-db-password@localhost:27017/splitledger?authSource=splitledger
+MONGO_ROOT_USERNAME=root
+MONGO_ROOT_PASSWORD=replace-with-strong-root-db-password
+MONGO_APP_USERNAME=splitledger_app
+MONGO_APP_PASSWORD=replace-with-strong-app-db-password
+MONGO_PORT_BIND=127.0.0.1:27017
+SPLITLEDGER_SEED_USERS=[{"id":"t_khant_naing","name":"T Khant Naing","email":"tkhantnaing@example.com","password":"replace-with-strong-user-password-1"}]
+```
+
+`MONGO_PORT_BIND=127.0.0.1:27017` keeps MongoDB reachable from the local machine only. Do not expose MongoDB publicly.
+
 ## Start MongoDB
 
 ```bash
 npm run db:up
 ```
 
-This builds `docker/mongo/Dockerfile`, starts MongoDB on `localhost:27017`, creates the `splitledger` database, creates the `splitledger` app user, and initializes the `users`, `sessions`, `loginAttempts`, and `expenses` collections with indexes.
-
-## Environment
-
-Create `.env.local` from `.env.example`:
-
-```bash
-MONGODB_URI=mongodb://splitledger:splitledger@localhost:27017/splitledger?authSource=splitledger
-MONGODB_DB=splitledger
-```
+The Mongo init script creates the app database, optional app database user, and indexes for `expenses`, `expenseAudits`, `users`, `sessions`, and `loginAttempts`.
 
 ## Verify Connection
 
@@ -31,38 +42,41 @@ Expected response:
 {"ok":true,"database":"splitledger"}
 ```
 
-For a write/read/delete smoke test from the web app process:
+The write/read/delete smoke endpoint is dev-only:
 
 ```bash
 curl -X POST http://localhost:3000/api/health/db
 ```
 
-## Seed Local Users
+## Seed Users
 
-With MongoDB and the Next.js dev server running:
+User passwords are not stored in source code. The dev seed route reads users from `SPLITLEDGER_SEED_USERS` and hashes passwords with `scrypt`.
 
 ```bash
 curl -X POST http://localhost:3000/api/dev/seed
 ```
 
-This dev-only route creates local users with `scrypt` password hashes and inserts starter expenses if they are missing.
+The seed route is disabled when `NODE_ENV=production`.
 
-Local credentials:
+## Backup
 
-```text
-aurora@example.com / split1234
-brother@example.com / brother1234
+Run a backup from the host:
+
+```bash
+docker compose exec mongo mongodump --archive=/tmp/splitledger.archive --gzip --db splitledger --username "$MONGO_ROOT_USERNAME" --password "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin
+docker compose cp mongo:/tmp/splitledger.archive ./backups/splitledger-$(date +%Y%m%d-%H%M%S).archive
 ```
 
-## Authentication Model
+Keep backups encrypted and off the application server.
 
-- Passwords are hashed with Node.js `scrypt`; plaintext passwords are never stored.
-- Login creates a random opaque session token.
-- Only a SHA-256 hash of the session token is stored in MongoDB.
-- The browser receives the token in an `httpOnly`, `SameSite=Lax` cookie.
-- In production, the cookie is also marked `Secure`.
-- Expense APIs require a valid server-side session.
-- Failed login attempts are rate-limited with MongoDB TTL cleanup.
+## Restore
+
+Restore into a stopped or maintenance-mode application:
+
+```bash
+docker compose cp ./backups/splitledger.archive mongo:/tmp/splitledger.archive
+docker compose exec mongo mongorestore --archive=/tmp/splitledger.archive --gzip --drop --username "$MONGO_ROOT_USERNAME" --password "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin
+```
 
 ## Stop MongoDB
 

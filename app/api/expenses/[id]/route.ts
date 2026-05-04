@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireCurrentUser } from "@/lib/server/api"
 import { deleteExpense } from "@/lib/server/expense-repository"
+import { validateTrustedOrigin } from "@/lib/server/security"
 
 interface RouteContext {
   params: Promise<{
@@ -8,7 +9,13 @@ interface RouteContext {
   }>
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
+  const originError = validateTrustedOrigin(request)
+
+  if (originError) {
+    return originError
+  }
+
   const auth = await requireCurrentUser()
 
   if (!auth.ok) {

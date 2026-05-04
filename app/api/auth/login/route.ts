@@ -6,9 +6,16 @@ import {
   recordFailedLogin
 } from "@/lib/server/login-rate-limit"
 import { verifyPassword } from "@/lib/server/passwords"
+import { validateTrustedOrigin } from "@/lib/server/security"
 import { createUserSession } from "@/lib/server/sessions"
 
 export async function POST(request: Request) {
+  const originError = validateTrustedOrigin(request)
+
+  if (originError) {
+    return originError
+  }
+
   const body = await readJson(request)
   const email = readString(body, "email")
   const password = readString(body, "password")

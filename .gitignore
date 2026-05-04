@@ -3,6 +3,7 @@ node_modules/
 
 # Next.js
 .next/
+.next-stale-*/
 out/
 
 # production builds
@@ -29,6 +30,11 @@ pnpm-debug.log*
 # test and coverage output
 coverage/
 .nyc_output/
+
+# local database artifacts
+backups/
+*.archive
+*.dump
 
 # hosting and tooling
 .vercel/

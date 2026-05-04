@@ -5,16 +5,19 @@ import { SummaryCard } from "@/components/summary-card"
 import {
   formatCompactCurrency,
   formatCurrency,
+  formatDisplayDate,
   sumExpenseOutflow,
   sumIncome,
   sumNetAmount,
   toDateKey
 } from "@/lib/expenses"
+import { translate, type Language } from "@/lib/i18n"
 import type { Expense } from "@/lib/types"
 
 interface ReportsViewProps {
   currentUserId: string
   expenses: ReadonlyArray<Expense>
+  language: Language
 }
 
 interface DailyReportRow {
@@ -36,7 +39,7 @@ interface TopExpenseRow {
   amount: number
 }
 
-export function ReportsView({ currentUserId, expenses }: ReportsViewProps) {
+export function ReportsView({ currentUserId, expenses, language }: ReportsViewProps) {
   const defaultRange = useMemo(() => getDefaultRange(), [])
   const [startDate, setStartDate] = useState(defaultRange.startDate)
   const [endDate, setEndDate] = useState(defaultRange.endDate)
@@ -51,21 +54,21 @@ export function ReportsView({ currentUserId, expenses }: ReportsViewProps) {
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="max-w-xl">
-            <h2 className="text-base font-semibold">Reports</h2>
+            <h2 className="text-base font-semibold">{translate(language, "reports")}</h2>
             <p className="mt-1 max-w-md text-sm leading-6 text-[var(--muted)]">
-              Review income, expenses, and net movement for the selected period.
+              {translate(language, "reportsDescription")}
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[145px_145px_auto] sm:items-end">
-            <DateField label="From" onChange={setStartDate} value={startDate} />
-            <DateField label="To" onChange={setEndDate} value={endDate} />
+            <DateField label={translate(language, "from")} onChange={setStartDate} value={startDate} />
+            <DateField label={translate(language, "to")} onChange={setEndDate} value={endDate} />
             <button
               className="h-10 rounded-md bg-[var(--text)] px-3 text-sm font-semibold text-[var(--surface)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={report.filteredExpenses.length === 0}
-              onClick={() => exportReportCsv(report.filteredExpenses, report.dailyRows)}
+              onClick={() => exportReportCsv(report.filteredExpenses)}
               type="button"
             >
-              Export CSV
+              {translate(language, "exportCsv")}
             </button>
           </div>
         </div>
@@ -74,24 +77,24 @@ export function ReportsView({ currentUserId, expenses }: ReportsViewProps) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           detail={`${report.businessCount} shared records`}
-          label="Business net"
+          label={translate(language, "businessNet")}
           tone="business"
           value={formatCompactCurrency(report.businessTotal)}
         />
         <SummaryCard
           detail={`${report.incomeCount} income records`}
-          label="Business income"
+          label={translate(language, "income")}
           value={formatCompactCurrency(report.incomeTotal)}
         />
         <SummaryCard
           detail={`${report.expenseCount} expense records`}
-          label="Business expenses"
+          label={translate(language, "expenses")}
           tone="personal"
           value={formatCompactCurrency(report.expenseTotal)}
         />
         <SummaryCard
           detail={`${report.personalCount} private records`}
-          label="Personal net"
+          label={translate(language, "personalNet")}
           tone="personal"
           value={formatCompactCurrency(report.personalTotal)}
         />
@@ -99,18 +102,21 @@ export function ReportsView({ currentUserId, expenses }: ReportsViewProps) {
 
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-semibold">Daily trend</h2>
-          <p className="text-sm text-[var(--muted)]">{report.filteredExpenses.length} records</p>
+          <h2 className="text-base font-semibold">{translate(language, "dailyTrend")}</h2>
+          <p className="text-sm text-[var(--muted)]">
+            {report.filteredExpenses.length}{" "}
+            {translate(language, report.filteredExpenses.length === 1 ? "record" : "records")}
+          </p>
         </div>
-        <DailyTrend rows={report.dailyRows} maxTotal={report.maxDailyTotal} />
+        <DailyTrend language={language} rows={report.dailyRows} maxTotal={report.maxDailyTotal} />
       </section>
 
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-base font-semibold">Largest expenses</h2>
-          <p className="text-sm text-[var(--muted)]">Top 5 in this period</p>
+          <h2 className="text-base font-semibold">{translate(language, "largestTransactions")}</h2>
+          <p className="text-sm text-[var(--muted)]">{translate(language, "topFivePeriod")}</p>
         </div>
-        <TopExpenses rows={report.topExpenses} />
+        <TopExpenses language={language} rows={report.topExpenses} />
       </section>
     </div>
   )
@@ -140,16 +146,18 @@ function DateField({
 }
 
 function DailyTrend({
+  language,
   maxTotal,
   rows
 }: {
+  language: Language
   maxTotal: number
   rows: ReadonlyArray<DailyReportRow>
 }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
-        No report data for this date range.
+        {translate(language, "noReportData")}
       </div>
     )
   }
@@ -159,24 +167,24 @@ function DailyTrend({
       <table className="w-full min-w-[720px] text-sm">
         <thead>
           <tr className="border-b border-[var(--line)] text-left text-xs font-semibold uppercase text-[var(--muted)]">
-            <th className="py-2 pr-3">Date</th>
-            <th className="px-3 py-2 text-right">Income</th>
-            <th className="px-3 py-2 text-right">Expenses</th>
-            <th className="px-3 py-2 text-right">Personal</th>
-            <th className="px-3 py-2">Records</th>
+            <th className="py-2 pr-3">{translate(language, "date")}</th>
+            <th className="px-3 py-2 text-right">{translate(language, "income")}</th>
+            <th className="px-3 py-2 text-right">{translate(language, "expenses")}</th>
+            <th className="px-3 py-2 text-right">{translate(language, "personalNet")}</th>
+            <th className="px-3 py-2">{translate(language, "records")}</th>
             <th className="py-2 pl-3 text-right">Net</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr className="border-b border-[var(--line)] last:border-b-0" key={row.date}>
-              <td className="py-3 pr-3 font-medium">{row.date}</td>
+              <td className="py-3 pr-3 font-medium">{formatDisplayDate(row.date)}</td>
               <td className="px-3 py-3 text-right text-[var(--success)]">
                 {formatCompactCurrency(row.income)}
               </td>
               <td className="px-3 py-3 text-right">{formatCompactCurrency(row.expenses)}</td>
-              <td className="px-3 py-3 text-right">
-                {formatCompactCurrency(Math.abs(row.personal))}
+              <td className={getReportAmountClassName(row.personal)}>
+                {formatCompactCurrency(row.personal)}
               </td>
               <td className="px-3 py-3">{row.count}</td>
               <td className="py-3 pl-3 text-right">
@@ -200,11 +208,17 @@ function DailyTrend({
   )
 }
 
-function TopExpenses({ rows }: { rows: ReadonlyArray<TopExpenseRow> }) {
+function TopExpenses({
+  language,
+  rows
+}: {
+  language: Language
+  rows: ReadonlyArray<TopExpenseRow>
+}) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
-        No expenses to rank in this date range.
+        {translate(language, "noTransactionsToRank")}
       </div>
     )
   }
@@ -216,10 +230,10 @@ function TopExpenses({ rows }: { rows: ReadonlyArray<TopExpenseRow> }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate text-sm font-semibold">{row.note}</h3>
-              <span className={getTypeClassName(row.type)}>{row.type}</span>
-              <span className={getKindClassName(row.kind)}>{row.kind}</span>
+              <span className={getTypeClassName(row.type)}>{translate(language, row.type)}</span>
+              <span className={getKindClassName(row.kind)}>{translate(language, row.kind)}</span>
             </div>
-            <p className="mt-1 text-xs text-[var(--muted)]">{row.date}</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">{formatDisplayDate(row.date)}</p>
           </div>
           <div className={getAmountClassName(row.kind)}>
             {row.kind === "income" ? "+" : "-"}
@@ -317,33 +331,19 @@ function buildDailyRows(expenses: ReadonlyArray<Expense>): DailyReportRow[] {
   return Array.from(rows.values()).sort((left, right) => right.date.localeCompare(left.date))
 }
 
-function exportReportCsv(
-  expenses: ReadonlyArray<Expense>,
-  dailyRows: ReadonlyArray<DailyReportRow>
-) {
+function exportReportCsv(expenses: ReadonlyArray<Expense>) {
   const rows = [
-    ["Report type", "Date", "Type", "Kind", "Note", "Records", "Amount Ks"],
-    ...dailyRows.map((row) => [
-      "Daily total",
-      row.date,
-      "combined",
-      "net",
-      "",
-      String(row.count),
-      String(row.total)
-    ]),
+    ["Date", "Note", "Amount Ks", "Kind", "Type"],
     ...expenses.map((expense) => [
-      "Expense",
       expense.date,
-      expense.type,
-      expense.kind,
       expense.note,
-      "1",
-      String(expense.amount)
+      String(expense.amount),
+      expense.kind,
+      expense.type
     ])
   ]
   const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
 
@@ -396,4 +396,9 @@ function getKindClassName(kind: Expense["kind"]): string {
 function getAmountClassName(kind: Expense["kind"]): string {
   const color = kind === "income" ? "text-[var(--success)]" : "text-[var(--text)]"
   return `text-right text-sm font-semibold ${color}`
+}
+
+function getReportAmountClassName(amount: number): string {
+  const color = amount >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
+  return `px-3 py-3 text-right ${color}`
 }

@@ -16,23 +16,29 @@ import {
   sumIncome,
   sumNetAmount
 } from "@/lib/expenses"
+import {
+  languageStorageKey,
+  translate,
+  type Language
+} from "@/lib/i18n"
 import { users } from "@/lib/mock-data"
 import type { Expense, ExpenseInput, User } from "@/lib/types"
 
 type View = "home" | "business" | "personal" | "add" | "reports"
 
 const navigation: { id: View; label: string }[] = [
-  { id: "home", label: "Home" },
-  { id: "business", label: "Business" },
-  { id: "personal", label: "Personal" },
-  { id: "add", label: "Add" },
-  { id: "reports", label: "Reports" }
+  { id: "home", label: "home" },
+  { id: "business", label: "business" },
+  { id: "personal", label: "personal" },
+  { id: "add", label: "addTransaction" },
+  { id: "reports", label: "reports" }
 ]
 
 export function AppShell() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [activeView, setActiveView] = useState<View>("home")
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [language, setLanguage] = useState<Language>("en")
   const [error, setError] = useState<string | null>(null)
   const [isBooting, setIsBooting] = useState(true)
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
@@ -47,8 +53,19 @@ export function AppShell() {
   )
 
   useEffect(() => {
+    const storedLanguage = window.localStorage.getItem(languageStorageKey)
+
+    if (storedLanguage === "en" || storedLanguage === "my") {
+      setLanguage(storedLanguage)
+    }
+
     void loadCurrentUser()
   }, [])
+
+  function handleLanguageChange(nextLanguage: Language) {
+    setLanguage(nextLanguage)
+    window.localStorage.setItem(languageStorageKey, nextLanguage)
+  }
 
   async function loadCurrentUser() {
     const response = await fetch("/api/auth/me")
@@ -85,7 +102,7 @@ export function AppShell() {
   if (isBooting) {
     return (
       <main className="grid min-h-screen place-items-center px-4 text-sm text-[var(--muted)]">
-        Loading secure session...
+        {translate(language, "loadingSecureSession")}
       </main>
     )
   }
@@ -93,6 +110,8 @@ export function AppShell() {
   if (!currentUser) {
     return (
       <LoginScreen
+        language={language}
+        onLanguageChange={handleLanguageChange}
         onLogin={async (user) => {
           setCurrentUser(user)
           await loadExpenses()
@@ -156,29 +175,37 @@ export function AppShell() {
       <aside className="hidden border-r border-[var(--line)] bg-[var(--surface)] p-4 lg:block">
         <div className="mb-8">
           <Logo />
-          <p className="mt-1 text-sm text-[var(--muted)]">Two-person expense control.</p>
         </div>
-        <Navigation activeView={activeView} onChange={setActiveView} />
+        <Navigation activeView={activeView} language={language} onChange={setActiveView} />
       </aside>
 
       <section className="pb-24 lg:pb-0">
-        <header className="sticky top-0 z-10 border-b border-[var(--line)] bg-[var(--background)]/95 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold">{getPageTitle(activeView)}</h1>
-              <p className="text-sm text-[var(--muted)]">Signed in as {currentUser.name}</p>
+        <header className="sticky top-0 z-10 border-b border-[var(--line)] bg-[var(--background)]/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex items-start justify-between gap-3 sm:items-center sm:gap-4">
+            <div className="min-w-0">
+              <h1 className="max-w-44 text-xl font-semibold leading-tight sm:max-w-none sm:text-2xl">
+                {getPageTitle(activeView, language)}
+              </h1>
+              <p className="mt-1 truncate text-xs text-[var(--muted)] sm:text-sm">
+                {translate(language, "signedInAs")} {currentUser.name}
+              </p>
             </div>
-            <button
-              className="h-10 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-medium hover:bg-[var(--surface-muted)]"
-              onClick={handleLogout}
-              type="button"
-            >
-              Sign out
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <LanguageSwitcher language={language} onChange={handleLanguageChange} />
+              <button
+                aria-label={translate(language, "signOut")}
+                className="grid size-10 place-items-center rounded-md border border-[var(--line)] bg-[var(--surface)] text-sm font-medium hover:bg-[var(--surface-muted)] sm:w-auto sm:px-3"
+                onClick={handleLogout}
+                type="button"
+              >
+                <span className="hidden sm:inline">{translate(language, "signOut")}</span>
+                <LogOutIcon />
+              </button>
+            </div>
           </div>
         </header>
 
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
           <Stack>
             {error ? (
               <div className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm font-medium text-[var(--danger)]">
@@ -187,12 +214,13 @@ export function AppShell() {
             ) : null}
             {isLoadingExpenses ? (
               <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
-                Loading expenses...
+                {translate(language, "loadingExpenses")}
               </div>
             ) : (
               renderView({
                 activeView,
                 expenses,
+                language,
                 visibleExpenses,
                 currentUserId,
                 totals,
@@ -209,12 +237,13 @@ export function AppShell() {
         <RightSummary
           businessCount={totals.businessCount}
           businessTotal={totals.businessMonth}
+          language={language}
           personalTotal={totals.personalMonth}
         />
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[var(--surface)] p-2 lg:hidden">
-        <Navigation activeView={activeView} mobile onChange={setActiveView} />
+        <Navigation activeView={activeView} language={language} mobile onChange={setActiveView} />
       </nav>
     </main>
   )
@@ -225,6 +254,7 @@ interface RenderViewArgs {
   expenses: ReadonlyArray<Expense>
   visibleExpenses: ReadonlyArray<Expense>
   currentUserId: string
+  language: Language
   totals: ReturnType<typeof calculateDashboardTotals>
   onChangeView: (view: View) => void
   onAddExpense: (input: ExpenseInput) => Promise<void>
@@ -236,6 +266,7 @@ function renderView({
   expenses,
   visibleExpenses,
   currentUserId,
+  language,
   totals,
   onChangeView,
   onAddExpense,
@@ -247,19 +278,19 @@ function renderView({
       <Stack>
         <div className="grid gap-3 sm:grid-cols-3">
           <SummaryCard
-            detail="Business net"
-            label="All total"
+            detail={translate(language, "businessNet")}
+            label={translate(language, "allTotal")}
             tone="business"
             value={formatCurrency(sumNetAmount(businessExpenses))}
           />
           <SummaryCard
-            detail="Incoming cash"
-            label="Income"
+            detail={translate(language, "incomingCash")}
+            label={translate(language, "income")}
             value={formatCurrency(sumIncome(businessExpenses))}
           />
           <SummaryCard
-            detail="Outgoing cash"
-            label="Expenses"
+            detail={translate(language, "outgoingCash")}
+            label={translate(language, "expenses")}
             tone="personal"
             value={formatCurrency(sumExpenseOutflow(businessExpenses))}
           />
@@ -267,17 +298,15 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="business"
+          language={language}
           onAddExpense={onAddExpense}
         />
-        <Panel title="Daily subtotals">
-          <DailySubtotals expenses={businessExpenses} />
-        </Panel>
-        <Panel title="Business transactions">
-          <ExpenseList
-            expenses={businessExpenses}
-            onDeleteExpense={onDeleteExpense}
-          />
-        </Panel>
+        <FilteredTransactionsPanel
+          expenses={businessExpenses}
+          language={language}
+          onDeleteExpense={onDeleteExpense}
+          title={translate(language, "businessTransactions")}
+        />
       </Stack>
     )
   }
@@ -288,19 +317,19 @@ function renderView({
       <Stack>
         <div className="grid gap-3 sm:grid-cols-3">
           <SummaryCard
-            detail="Personal net"
-            label="All total"
+            detail={translate(language, "personalNet")}
+            label={translate(language, "allTotal")}
             tone="personal"
             value={formatCurrency(sumNetAmount(personalExpenses))}
           />
           <SummaryCard
-            detail="Personal income"
-            label="Income"
+            detail={translate(language, "income")}
+            label={translate(language, "income")}
             value={formatCurrency(sumIncome(personalExpenses))}
           />
           <SummaryCard
-            detail="Personal spending"
-            label="Expenses"
+            detail={translate(language, "personalSpending")}
+            label={translate(language, "expenses")}
             tone="personal"
             value={formatCurrency(sumExpenseOutflow(personalExpenses))}
           />
@@ -308,36 +337,40 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="personal"
+          language={language}
           onAddExpense={onAddExpense}
         />
-        <Panel title="Daily subtotals">
-          <DailySubtotals expenses={personalExpenses} />
-        </Panel>
-        <Panel title="Personal transactions">
-          <ExpenseList
-            expenses={personalExpenses}
-            onDeleteExpense={onDeleteExpense}
-          />
-        </Panel>
+        <FilteredTransactionsPanel
+          expenses={personalExpenses}
+          language={language}
+          onDeleteExpense={onDeleteExpense}
+          title={translate(language, "personalTransactions")}
+        />
       </Stack>
     )
   }
 
   if (activeView === "add") {
     return (
-      <Panel title="Add expense">
-        <AddExpenseForm currentUserId={currentUserId} onAddExpense={onAddExpense} users={users} />
+      <Panel title={translate(language, "addTransaction")}>
+        <AddExpenseForm
+          currentUserId={currentUserId}
+          language={language}
+          onAddExpense={onAddExpense}
+          users={users}
+        />
       </Panel>
     )
   }
 
   if (activeView === "reports") {
-    return <ReportsView currentUserId={currentUserId} expenses={expenses} />
+    return <ReportsView currentUserId={currentUserId} expenses={expenses} language={language} />
   }
 
   return (
     <HomeView
       onChangeView={onChangeView}
+      language={language}
       onDeleteExpense={onDeleteExpense}
       totals={totals}
       visibleExpenses={visibleExpenses}
@@ -347,11 +380,13 @@ function renderView({
 
 function HomeView({
   onChangeView,
+  language,
   onDeleteExpense,
   totals,
   visibleExpenses
 }: {
   onChangeView: (view: View) => void
+  language: Language
   onDeleteExpense: (expenseId: string) => Promise<void>
   totals: ReturnType<typeof calculateDashboardTotals>
   visibleExpenses: ReadonlyArray<Expense>
@@ -363,48 +398,47 @@ function HomeView({
       <section className="space-y-3">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold">This month</h2>
-            <p className="text-sm text-[var(--muted)]">Net cashflow across visible accounts.</p>
+            <h2 className="text-base font-semibold">{translate(language, "thisMonth")}</h2>
           </div>
           <button
             className="h-9 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-medium hover:bg-[var(--surface-muted)]"
             onClick={() => onChangeView("reports")}
             type="button"
           >
-            View reports
+            {translate(language, "viewReports")}
           </button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
-            detail="Business and personal"
-            label="Month net"
+            detail={translate(language, "businessAndPersonal")}
+            label={translate(language, "monthNet")}
             tone="business"
             value={formatCompactCurrency(sumNetAmount(monthTransactions))}
           />
           <SummaryCard
-            detail="Incoming cash"
-            label="Income"
+            detail={translate(language, "incomingCash")}
+            label={translate(language, "income")}
             value={formatCompactCurrency(sumIncome(monthTransactions))}
           />
           <SummaryCard
-            detail="Outgoing cash"
-            label="Expenses"
+            detail={translate(language, "outgoingCash")}
+            label={translate(language, "expenses")}
             tone="personal"
             value={formatCompactCurrency(sumExpenseOutflow(monthTransactions))}
           />
-          <SummaryCard label="Today" value={formatCompactCurrency(totals.today)} />
+          <SummaryCard label={translate(language, "today")} value={formatCompactCurrency(totals.today)} />
         </div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2">
         <HomeAction
-          detail="Shared ledger"
-          label="Business"
+          detail={translate(language, "sharedLedger")}
+          label={translate(language, "business")}
           onClick={() => onChangeView("business")}
         />
         <HomeAction
-          detail="Only visible to you"
-          label="Personal"
+          detail={translate(language, "personalNet")}
+          label={translate(language, "personal")}
           onClick={() => onChangeView("personal")}
         />
       </section>
@@ -412,9 +446,9 @@ function HomeView({
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold">Recent transactions</h2>
+            <h2 className="text-base font-semibold">{translate(language, "recentTransactions")}</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Latest income and expenses you can access.
+              {translate(language, "latestTransactions")}
             </p>
           </div>
           <button
@@ -422,11 +456,12 @@ function HomeView({
             onClick={() => onChangeView("business")}
             type="button"
           >
-            Open ledger
+            {translate(language, "openLedger")}
           </button>
         </div>
         <ExpenseList
           expenses={visibleExpenses.slice(0, 6)}
+          language={language}
           onDeleteExpense={onDeleteExpense}
         />
       </section>
@@ -455,83 +490,164 @@ function HomeAction({
   )
 }
 
-interface DailySubtotalRow {
-  count: number
-  date: string
-  expenses: number
-  income: number
-  net: number
-}
+type TransactionFilter = "expense" | "income" | "all"
 
-function DailySubtotals({ expenses }: { expenses: ReadonlyArray<Expense> }) {
-  const rows = buildDailySubtotalRows(expenses)
+const transactionFilters: { id: TransactionFilter; label: string }[] = [
+  { id: "expense", label: "expenses" },
+  { id: "income", label: "income" },
+  { id: "all", label: "all" }
+]
 
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
-        No transactions for this view yet.
-      </div>
-    )
-  }
+function FilteredTransactionsPanel({
+  expenses,
+  language,
+  onDeleteExpense,
+  title
+}: {
+  expenses: ReadonlyArray<Expense>
+  language: Language
+  onDeleteExpense: (expenseId: string) => Promise<void>
+  title: string
+}) {
+  const [activeFilter, setActiveFilter] = useState<TransactionFilter>("expense")
+  const monthOptions = getMonthOptions(expenses, language)
+  const [activeMonth, setActiveMonth] = useState(getDefaultMonth(monthOptions))
+  const filteredExpenses = filterTransactionsByMonth(
+    filterTransactions(expenses, activeFilter),
+    activeMonth
+  )
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
-        <thead>
-          <tr className="border-b border-[var(--line)] text-left text-xs font-semibold uppercase text-[var(--muted)]">
-            <th className="py-2 pr-3">Date</th>
-            <th className="px-3 py-2 text-right">Income</th>
-            <th className="px-3 py-2 text-right">Expenses</th>
-            <th className="px-3 py-2 text-center">Records</th>
-            <th className="py-2 pl-3 text-right">Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr className="border-b border-[var(--line)] last:border-b-0" key={row.date}>
-              <td className="py-3 pr-3 font-medium">{row.date}</td>
-              <td className="px-3 py-3 text-right text-[var(--success)]">
-                {formatCurrency(row.income)}
-              </td>
-              <td className="px-3 py-3 text-right">{formatCurrency(row.expenses)}</td>
-              <td className="px-3 py-3 text-center">{row.count}</td>
-              <td className={getSubtotalClassName(row.net)}>{formatCurrency(row.net)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {filteredExpenses.length}{" "}
+            {translate(language, filteredExpenses.length === 1 ? "record" : "records")}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            className="h-9 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-medium outline-none focus:border-[var(--business)] sm:h-10"
+            onChange={(event) => setActiveMonth(event.target.value)}
+            value={activeMonth}
+          >
+            {monthOptions.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-3 rounded-md border border-[var(--line)] bg-[var(--surface-muted)] p-1">
+            {transactionFilters.map((filter) => (
+              <button
+                className={getFilterButtonClassName(activeFilter === filter.id)}
+                key={filter.id}
+                onClick={() => setActiveFilter(filter.id)}
+                type="button"
+              >
+                {translate(language, filter.label)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <ExpenseList
+        expenses={filteredExpenses}
+        groupByDate
+        language={language}
+        onDeleteExpense={onDeleteExpense}
+        showSigns={activeFilter === "all"}
+      />
+    </section>
   )
 }
 
-function buildDailySubtotalRows(expenses: ReadonlyArray<Expense>): DailySubtotalRow[] {
-  const rows = new Map<string, DailySubtotalRow>()
-
-  for (const expense of expenses) {
-    const current = rows.get(expense.date) ?? {
-      count: 0,
-      date: expense.date,
-      expenses: 0,
-      income: 0,
-      net: 0
-    }
-    const isIncome = expense.kind === "income"
-
-    rows.set(expense.date, {
-      count: current.count + 1,
-      date: expense.date,
-      expenses: current.expenses + (isIncome ? 0 : expense.amount),
-      income: current.income + (isIncome ? expense.amount : 0),
-      net: current.net + (isIncome ? expense.amount : -expense.amount)
-    })
-  }
-
-  return Array.from(rows.values()).sort((left, right) => right.date.localeCompare(left.date))
+function filterTransactionsByMonth(
+  expenses: ReadonlyArray<Expense>,
+  activeMonth: string
+): Expense[] {
+  return expenses.filter((expense) => expense.date.startsWith(activeMonth))
 }
 
-function getSubtotalClassName(amount: number): string {
-  const color = amount >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
-  return `py-3 pl-3 text-right font-semibold ${color}`
+function filterTransactions(
+  expenses: ReadonlyArray<Expense>,
+  activeFilter: TransactionFilter
+): Expense[] {
+  if (activeFilter === "all") {
+    return [...expenses]
+  }
+
+  return expenses.filter((expense) => expense.kind === activeFilter)
+}
+
+function getMonthOptions(expenses: ReadonlyArray<Expense>, language: Language): Array<{
+  label: string
+  value: string
+}> {
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  const monthKeys = new Set([currentMonth])
+
+  for (const expense of expenses) {
+    monthKeys.add(expense.date.slice(0, 7))
+  }
+
+  return Array.from(monthKeys)
+    .sort((left, right) => right.localeCompare(left))
+    .map((monthKey) => ({
+      label: formatMonthLabel(monthKey, language),
+      value: monthKey
+    }))
+}
+
+function getDefaultMonth(monthOptions: ReadonlyArray<{ value: string }>): string {
+  return monthOptions[0]?.value ?? new Date().toISOString().slice(0, 7)
+}
+
+function formatMonthLabel(monthKey: string, language: Language = "en"): string {
+  const [year, month] = monthKey.split("-")
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ]
+  const burmeseMonthNames = [
+    "ဇန်နဝါရီ",
+    "ဖေဖော်ဝါရီ",
+    "မတ်",
+    "ဧပြီ",
+    "မေ",
+    "ဇွန်",
+    "ဇူလိုင်",
+    "ဩဂုတ်",
+    "စက်တင်ဘာ",
+    "အောက်တိုဘာ",
+    "နိုဝင်ဘာ",
+    "ဒီဇင်ဘာ"
+  ]
+  const labels = language === "my" ? burmeseMonthNames : monthNames
+  const monthName = labels[Number(month) - 1] ?? monthKey
+
+  return monthName
+}
+
+function getFilterButtonClassName(isActive: boolean): string {
+  const base = "h-8 rounded px-2 text-xs font-semibold transition-colors sm:px-3"
+  const state = isActive
+    ? "bg-[var(--surface)] text-[var(--text)] shadow-sm"
+    : "text-[var(--muted)] hover:text-[var(--text)]"
+
+  return `${base} ${state}`
 }
 
 function getCurrentMonthTransactions(expenses: ReadonlyArray<Expense>): Expense[] {
@@ -542,14 +658,16 @@ function getCurrentMonthTransactions(expenses: ReadonlyArray<Expense>): Expense[
 function TransactionEntry({
   currentUserId,
   fixedType,
+  language,
   onAddExpense
 }: {
   currentUserId: string
   fixedType: "business" | "personal"
+  language: Language
   onAddExpense: (input: ExpenseInput) => Promise<void>
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const label = fixedType === "business" ? "Business" : "Personal"
+  const label = fixedType === "business" ? translate(language, "business") : translate(language, "personal")
 
   async function handleAddExpense(input: ExpenseInput) {
     await onAddExpense(input)
@@ -558,10 +676,17 @@ function TransactionEntry({
 
   if (isOpen) {
     return (
-      <Panel title={`Add ${fixedType} transaction`}>
+      <Panel
+        title={
+          fixedType === "business"
+            ? translate(language, "addBusinessTransaction")
+            : translate(language, "addPersonalTransaction")
+        }
+      >
         <AddExpenseForm
           currentUserId={currentUserId}
           fixedType={fixedType}
+          language={language}
           onAddExpense={handleAddExpense}
           users={users}
         />
@@ -570,17 +695,19 @@ function TransactionEntry({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <section className="flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4">
       <div>
         <h2 className="text-base font-semibold">{label} transactions</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">Add income or expense when needed.</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          {translate(language, "addIncomeOrExpense")}
+        </p>
       </div>
       <button
         className="h-10 rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
         onClick={() => setIsOpen(true)}
         type="button"
       >
-        Add transaction
+        {translate(language, "addTransaction")}
       </button>
     </section>
   )
@@ -588,24 +715,113 @@ function TransactionEntry({
 
 interface NavigationProps {
   activeView: View
+  language: Language
   mobile?: boolean
   onChange: (view: View) => void
 }
 
-function Navigation({ activeView, mobile = false, onChange }: NavigationProps) {
+function Navigation({ activeView, language, mobile = false, onChange }: NavigationProps) {
   return (
     <div className={mobile ? "grid grid-cols-5 gap-1" : "space-y-1"}>
-      {navigation.map((item) => (
-        <button
-          className={getNavigationClassName(activeView === item.id, mobile)}
-          key={item.id}
-          onClick={() => onChange(item.id)}
-          type="button"
-        >
-          {item.label}
-        </button>
-      ))}
+      {navigation.map((item) => {
+        const label = translate(language, item.label)
+
+        return (
+          <button
+            aria-label={label}
+            className={getNavigationClassName(activeView === item.id, mobile)}
+            key={item.id}
+            onClick={() => onChange(item.id)}
+            title={label}
+            type="button"
+          >
+            {mobile ? (
+              <>
+                <NavigationIcon view={item.id} />
+                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--text)] px-2 py-1 text-xs font-medium text-[var(--surface)] shadow-sm group-hover:block group-focus-visible:block">
+                  {label}
+                </span>
+              </>
+            ) : (
+              label
+            )}
+          </button>
+        )
+      })}
     </div>
+  )
+}
+
+function NavigationIcon({ view }: { view: View }) {
+  const iconClassName = "size-5"
+
+  if (view === "home") {
+    return (
+      <svg aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5 10.5V20h14v-9.5" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+    )
+  }
+
+  if (view === "business") {
+    return (
+      <svg aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M9 7V5h6v2" />
+        <path d="M4 7h16v13H4z" />
+        <path d="M4 12h16" />
+        <path d="M10 12v2h4v-2" />
+      </svg>
+    )
+  }
+
+  if (view === "personal") {
+    return (
+      <svg aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M20 21a8 8 0 0 0-16 0" />
+        <circle cx="12" cy="8" r="4" />
+      </svg>
+    )
+  }
+
+  if (view === "add") {
+    return (
+      <svg aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v8" />
+        <path d="M8 12h8" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" className={iconClassName} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="M8 16v-5" />
+      <path d="M12 16V8" />
+      <path d="M16 16v-3" />
+    </svg>
+  )
+}
+
+function LogOutIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4 sm:hidden"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 19V5" />
+    </svg>
   )
 }
 
@@ -627,29 +843,26 @@ function Panel({
 function RightSummary({
   businessCount,
   businessTotal,
+  language,
   personalTotal
 }: {
   businessCount: number
   businessTotal: number
+  language: Language
   personalTotal: number
 }) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-base font-semibold">Shared ledger</h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Business data is one linked account for both users.
-        </p>
+        <h2 className="text-base font-semibold">{translate(language, "sharedLedger")}</h2>
       </div>
       <SummaryCard
-        detail={`${businessCount} shared records`}
-        label="Business month"
+        label={translate(language, "businessMonth")}
         tone="business"
         value={formatCurrency(businessTotal)}
       />
       <SummaryCard
-        detail="Only visible to you"
-        label="Personal month"
+        label={translate(language, "personalMonth")}
         tone="personal"
         value={formatCurrency(personalTotal)}
       />
@@ -658,13 +871,15 @@ function RightSummary({
 }
 
 function Stack({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-5">{children}</div>
+  return <div className="space-y-4 sm:space-y-5">{children}</div>
 }
 
 function getNavigationClassName(isActive: boolean, mobile: boolean): string {
   const base =
     "rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
-  const size = mobile ? "min-h-11 text-xs" : "w-full text-left"
+  const size = mobile
+    ? "group relative grid min-h-12 place-items-center"
+    : "w-full text-left"
   const state = isActive
     ? "bg-[var(--text)] text-[var(--surface)]"
     : "text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)]"
@@ -672,14 +887,38 @@ function getNavigationClassName(isActive: boolean, mobile: boolean): string {
   return `${base} ${size} ${state}`
 }
 
-function getPageTitle(view: View): string {
-  const titles: Record<View, string> = {
-    home: "Home",
-    business: "Business expenses",
-    personal: "Personal expenses",
-    add: "Add expense",
-    reports: "Reports"
+function LanguageSwitcher({
+  language,
+  onChange
+}: {
+  language: Language
+  onChange: (language: Language) => void
+}) {
+  const nextLanguage = language === "en" ? "my" : "en"
+  const label = language === "en" ? "EN" : "မြန်"
+  const nextLabel = nextLanguage === "en" ? "English" : "မြန်မာ"
+
+  return (
+    <button
+      aria-label={`Switch language to ${nextLabel}`}
+      className="grid h-10 min-w-14 place-items-center rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-semibold hover:bg-[var(--surface-muted)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+      onClick={() => onChange(nextLanguage)}
+      title={`Switch to ${nextLabel}`}
+      type="button"
+    >
+      {label}
+    </button>
+  )
+}
+
+function getPageTitle(view: View, language: Language): string {
+  const titleKeys: Record<View, string> = {
+    home: "home",
+    business: "businessTransactions",
+    personal: "personalTransactions",
+    add: "addTransaction",
+    reports: "reports"
   }
 
-  return titles[view]
+  return translate(language, titleKeys[view])
 }

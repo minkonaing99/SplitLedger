@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import { translate, type Language } from "@/lib/i18n"
 import type { ExpenseInput, ExpenseType, TransactionKind, User } from "@/lib/types"
 
 interface AddExpenseFormProps {
   currentUserId: string
   fixedType?: ExpenseType
+  language: Language
   users: ReadonlyArray<User>
   onAddExpense: (input: ExpenseInput) => Promise<void>
 }
@@ -13,6 +15,7 @@ interface AddExpenseFormProps {
 export function AddExpenseForm({
   currentUserId,
   fixedType,
+  language,
   users,
   onAddExpense
 }: AddExpenseFormProps) {
@@ -46,7 +49,7 @@ export function AddExpenseForm({
     <form action={handleSubmit} autoComplete="off" className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1 text-sm font-medium">
-          <span>Amount</span>
+          <span>{translate(language, "amount")}</span>
           <input
             autoComplete="off"
             className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
@@ -59,7 +62,7 @@ export function AddExpenseForm({
           />
         </label>
         <label className="space-y-1 text-sm font-medium">
-          <span>Type</span>
+          <span>{translate(language, "type")}</span>
           {fixedType ? (
             <div className="flex h-11 items-center rounded-md border border-[var(--line)] bg-[var(--surface-muted)] px-3 text-sm capitalize text-[var(--muted)]">
               {fixedType}
@@ -70,30 +73,30 @@ export function AddExpenseForm({
               className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
               name="type"
             >
-              <option value="business">Business</option>
-              <option value="personal">Personal</option>
+              <option value="business">{translate(language, "business")}</option>
+              <option value="personal">{translate(language, "personal")}</option>
             </select>
           )}
         </label>
       </div>
       <label className="block space-y-1 text-sm font-medium">
-        <span>Category</span>
+        <span>{translate(language, "category")}</span>
         <select
           autoComplete="off"
           className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
           name="kind"
         >
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
+          <option value="expense">{translate(language, "expenses")}</option>
+          <option value="income">{translate(language, "income")}</option>
         </select>
       </label>
       <div className="rounded-lg bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted)]">
         {fixedType === "business"
-          ? "Business entries are shared with both accounts."
+          ? translate(language, "sharedLedger")
           : `Personal entries are private to ${getUserName(users, currentUserId)}.`}
       </div>
       <label className="block space-y-1 text-sm font-medium">
-        <span>Date</span>
+        <span>{translate(language, "date")}</span>
         <input
           autoComplete="off"
           className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
@@ -104,12 +107,12 @@ export function AddExpenseForm({
         />
       </label>
       <label className="block space-y-1 text-sm font-medium">
-        <span>Note</span>
+        <span>{translate(language, "note")}</span>
         <textarea
           autoComplete="off"
           className="min-h-24 w-full resize-none rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 outline-none focus:border-[var(--business)]"
           name="note"
-          placeholder="What was this for?"
+          placeholder={translate(language, "transactionNotePlaceholder")}
           required
         />
       </label>
@@ -123,7 +126,7 @@ export function AddExpenseForm({
         disabled={isSubmitting}
         type="submit"
       >
-        {isSubmitting ? "Adding..." : "Add expense"}
+        {isSubmitting ? translate(language, "saving") : translate(language, "saveTransaction")}
       </button>
     </form>
   )

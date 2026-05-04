@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getMongoConnection } from "@/lib/server/mongodb"
+import { validateTrustedOrigin } from "@/lib/server/security"
 
 const SMOKE_TEST_WORKSPACE_ID = "health-smoke-test"
 
@@ -23,7 +24,13 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const originError = validateTrustedOrigin(request)
+
+  if (originError) {
+    return originError
+  }
+
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
       {
