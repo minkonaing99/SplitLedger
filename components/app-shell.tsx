@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { AddExpenseForm } from "@/components/add-expense-form"
 import { ExpenseList } from "@/components/expense-list"
 import { LoginScreen } from "@/components/login-screen"
@@ -46,6 +46,7 @@ export function AppShell() {
   const [isOnline, setIsOnline] = useState(true)
   const [isBooting, setIsBooting] = useState(true)
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
+  const lastAutoRefreshAt = useRef(0)
   const currentUserId = currentUser?.id ?? ""
   const visibleExpenses = useMemo(
     () => getVisibleExpenses(expenses, currentUserId),
@@ -71,7 +72,9 @@ export function AppShell() {
 
     function handleOnline() {
       setIsOnline(true)
-      void loadExpenses()
+      if (currentUserId) {
+        void loadExpenses(currentUserId)
+      }
     }
 
     function handleOffline() {
@@ -85,7 +88,38 @@ export function AppShell() {
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
     }
-  }, [])
+  }, [currentUserId])
+
+  useEffect(() => {
+    function refreshVisibleData() {
+      const now = Date.now()
+
+      if (
+        !currentUserId ||
+        !navigator.onLine ||
+        now - lastAutoRefreshAt.current < 15000
+      ) {
+        return
+      }
+
+      lastAutoRefreshAt.current = now
+      void loadExpenses(currentUserId)
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        refreshVisibleData()
+      }
+    }
+
+    window.addEventListener("focus", refreshVisibleData)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("focus", refreshVisibleData)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [currentUserId])
 
   function handleLanguageChange(nextLanguage: Language) {
     setLanguage(nextLanguage)
@@ -93,30 +127,45 @@ export function AppShell() {
   }
 
   async function loadCurrentUser() {
-    if (!navigator.onLine) {
-      const cachedUser = readCachedUser()
+    const cachedUser = readCachedUser()
 
+    if (!navigator.onLine) {
       if (cachedUser) {
         setCurrentUser(cachedUser)
         setIsBooting(false)
-        await loadExpenses(cachedUser.id)
+        void loadExpenses(cachedUser.id)
         return
       }
     }
 
-    const response = await fetch("/api/auth/me")
+    try {
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store"
+      })
 
-    if (!response.ok) {
-      setCurrentUser(null)
+      if (!response.ok) {
+        setCurrentUser(null)
+        setIsBooting(false)
+        return
+      }
+
+      const result = (await response.json()) as { user: User }
+      setCurrentUser(result.user)
+      writeCachedUser(result.user)
       setIsBooting(false)
+      void loadExpenses(result.user.id)
       return
+    } catch {
+      if (cachedUser) {
+        setCurrentUser(cachedUser)
+        setError(translate(language, "offlineReadOnly"))
+        setIsBooting(false)
+        void loadExpenses(cachedUser.id)
+        return
+      }
     }
 
-    const result = (await response.json()) as { user: User }
-    setCurrentUser(result.user)
-    writeCachedUser(result.user)
     setIsBooting(false)
-    await loadExpenses(result.user.id)
   }
 
   async function loadExpenses(userId = currentUserId) {
@@ -137,18 +186,32 @@ export function AppShell() {
     setIsLoadingExpenses(true)
     setError(null)
 
-    const response = await fetch("/api/expenses")
-    const result = (await response.json()) as { error?: string; expenses?: Expense[] }
+    try {
+      const response = await fetch("/api/expenses", {
+        cache: "no-store"
+      })
+      const result = (await response.json()) as { error?: string; expenses?: Expense[] }
 
-    if (!response.ok || !result.expenses) {
-      setError(result.error ?? "Unable to load expenses.")
+      if (!response.ok || !result.expenses) {
+        setError(result.error ?? "Unable to load expenses.")
+        setIsLoadingExpenses(false)
+        return
+      }
+
+      setExpenses(result.expenses)
+      writeCachedExpenses(userId, result.expenses)
+    } catch {
+      const cachedExpenses = readCachedExpenses(userId)
+
+      if (cachedExpenses.length > 0) {
+        setExpenses(cachedExpenses)
+        setError(translate(language, "offlineReadOnly"))
+      } else {
+        setError("Unable to load expenses.")
+      }
+    } finally {
       setIsLoadingExpenses(false)
-      return
     }
-
-    setExpenses(result.expenses)
-    writeCachedExpenses(userId, result.expenses)
-    setIsLoadingExpenses(false)
   }
 
   if (isBooting) {
@@ -235,7 +298,7 @@ export function AppShell() {
 
   async function handleRefresh() {
     window.scrollTo({ top: 0, behavior: "smooth" })
-    await loadExpenses()
+    await loadExpenses(currentUserId)
   }
 
   return (
@@ -260,14 +323,15 @@ export function AppShell() {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
-                aria-label="Refresh"
-                className="grid size-10 place-items-center rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] lg:hidden disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={translate(language, "refresh")}
+                className="hidden h-10 items-center justify-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-50 lg:flex"
                 disabled={isLoadingExpenses}
                 onClick={handleRefresh}
-                title="Refresh"
+                title={translate(language, "refresh")}
                 type="button"
               >
                 <RefreshIcon />
+                <span className="hidden xl:inline">{translate(language, "refresh")}</span>
               </button>
               <LanguageSwitcher language={language} onChange={handleLanguageChange} />
               <button
