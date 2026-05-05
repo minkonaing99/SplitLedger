@@ -34,12 +34,16 @@ const navigation: { id: View; label: string }[] = [
   { id: "reports", label: "reports" }
 ]
 
+const expenseCacheKey = "splitledger_visible_expenses"
+const userCacheKey = "splitledger_current_user"
+
 export function AppShell() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [activeView, setActiveView] = useState<View>("home")
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [language, setLanguage] = useState<Language>("en")
   const [error, setError] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
   const [isBooting, setIsBooting] = useState(true)
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
   const currentUserId = currentUser?.id ?? ""
@@ -62,12 +66,44 @@ export function AppShell() {
     void loadCurrentUser()
   }, [])
 
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+
+    function handleOnline() {
+      setIsOnline(true)
+      void loadExpenses()
+    }
+
+    function handleOffline() {
+      setIsOnline(false)
+    }
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
+
   function handleLanguageChange(nextLanguage: Language) {
     setLanguage(nextLanguage)
     window.localStorage.setItem(languageStorageKey, nextLanguage)
   }
 
   async function loadCurrentUser() {
+    if (!navigator.onLine) {
+      const cachedUser = readCachedUser()
+
+      if (cachedUser) {
+        setCurrentUser(cachedUser)
+        setIsBooting(false)
+        await loadExpenses(cachedUser.id)
+        return
+      }
+    }
+
     const response = await fetch("/api/auth/me")
 
     if (!response.ok) {
@@ -78,11 +114,26 @@ export function AppShell() {
 
     const result = (await response.json()) as { user: User }
     setCurrentUser(result.user)
+    writeCachedUser(result.user)
     setIsBooting(false)
-    await loadExpenses()
+    await loadExpenses(result.user.id)
   }
 
-  async function loadExpenses() {
+  async function loadExpenses(userId = currentUserId) {
+    if (!navigator.onLine) {
+      const cachedExpenses = readCachedExpenses(userId)
+
+      if (cachedExpenses.length > 0) {
+        setExpenses(cachedExpenses)
+        setError(null)
+      } else {
+        setError(translate(language, "offlineReadOnly"))
+      }
+
+      setIsLoadingExpenses(false)
+      return
+    }
+
     setIsLoadingExpenses(true)
     setError(null)
 
@@ -96,6 +147,7 @@ export function AppShell() {
     }
 
     setExpenses(result.expenses)
+    writeCachedExpenses(userId, result.expenses)
     setIsLoadingExpenses(false)
   }
 
@@ -114,13 +166,18 @@ export function AppShell() {
         onLanguageChange={handleLanguageChange}
         onLogin={async (user) => {
           setCurrentUser(user)
-          await loadExpenses()
+          writeCachedUser(user)
+          await loadExpenses(user.id)
         }}
       />
     )
   }
 
   async function handleAddExpense(input: ExpenseInput) {
+    if (!isOnline) {
+      throw new Error(translate(language, "offlineReadOnly"))
+    }
+
     const response = await fetch("/api/expenses", {
       method: "POST",
       headers: {
@@ -146,6 +203,11 @@ export function AppShell() {
   }
 
   async function handleDeleteExpense(expenseId: string) {
+    if (!isOnline) {
+      setError(translate(language, "offlineReadOnly"))
+      return
+    }
+
     const response = await fetch(`/api/expenses/${expenseId}`, {
       method: "DELETE"
     })
@@ -167,7 +229,13 @@ export function AppShell() {
     })
     setCurrentUser(null)
     setExpenses([])
+    window.localStorage.removeItem(userCacheKey)
     setActiveView("home")
+  }
+
+  async function handleRefresh() {
+    window.scrollTo({ top: 0, behavior: "smooth" })
+    await loadExpenses()
   }
 
   return (
@@ -191,6 +259,16 @@ export function AppShell() {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <button
+                aria-label="Refresh"
+                className="grid size-10 place-items-center rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] lg:hidden disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isLoadingExpenses}
+                onClick={handleRefresh}
+                title="Refresh"
+                type="button"
+              >
+                <RefreshIcon />
+              </button>
               <LanguageSwitcher language={language} onChange={handleLanguageChange} />
               <button
                 aria-label={translate(language, "signOut")}
@@ -212,6 +290,11 @@ export function AppShell() {
                 {error}
               </div>
             ) : null}
+            {!isOnline ? (
+              <div className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm font-medium text-[var(--muted)]">
+                {translate(language, "offlineReadOnly")}
+              </div>
+            ) : null}
             {isLoadingExpenses ? (
               <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
                 {translate(language, "loadingExpenses")}
@@ -220,6 +303,7 @@ export function AppShell() {
               renderView({
                 activeView,
                 expenses,
+                isOnline,
                 language,
                 visibleExpenses,
                 currentUserId,
@@ -252,6 +336,7 @@ export function AppShell() {
 interface RenderViewArgs {
   activeView: View
   expenses: ReadonlyArray<Expense>
+  isOnline: boolean
   visibleExpenses: ReadonlyArray<Expense>
   currentUserId: string
   language: Language
@@ -264,6 +349,7 @@ interface RenderViewArgs {
 function renderView({
   activeView,
   expenses,
+  isOnline,
   visibleExpenses,
   currentUserId,
   language,
@@ -298,11 +384,13 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="business"
+          isOnline={isOnline}
           language={language}
           onAddExpense={onAddExpense}
         />
         <FilteredTransactionsPanel
           expenses={businessExpenses}
+          isOnline={isOnline}
           language={language}
           onDeleteExpense={onDeleteExpense}
           title={translate(language, "businessTransactions")}
@@ -337,11 +425,13 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="personal"
+          isOnline={isOnline}
           language={language}
           onAddExpense={onAddExpense}
         />
         <FilteredTransactionsPanel
           expenses={personalExpenses}
+          isOnline={isOnline}
           language={language}
           onDeleteExpense={onDeleteExpense}
           title={translate(language, "personalTransactions")}
@@ -355,6 +445,7 @@ function renderView({
       <Panel title={translate(language, "addTransaction")}>
         <AddExpenseForm
           currentUserId={currentUserId}
+          isOnline={isOnline}
           language={language}
           onAddExpense={onAddExpense}
           users={users}
@@ -371,6 +462,7 @@ function renderView({
     <HomeView
       onChangeView={onChangeView}
       language={language}
+      isOnline={isOnline}
       onDeleteExpense={onDeleteExpense}
       totals={totals}
       visibleExpenses={visibleExpenses}
@@ -380,12 +472,14 @@ function renderView({
 
 function HomeView({
   onChangeView,
+  isOnline,
   language,
   onDeleteExpense,
   totals,
   visibleExpenses
 }: {
   onChangeView: (view: View) => void
+  isOnline: boolean
   language: Language
   onDeleteExpense: (expenseId: string) => Promise<void>
   totals: ReturnType<typeof calculateDashboardTotals>
@@ -461,6 +555,7 @@ function HomeView({
         </div>
         <ExpenseList
           expenses={visibleExpenses.slice(0, 6)}
+          isOnline={isOnline}
           language={language}
           onDeleteExpense={onDeleteExpense}
         />
@@ -500,11 +595,13 @@ const transactionFilters: { id: TransactionFilter; label: string }[] = [
 
 function FilteredTransactionsPanel({
   expenses,
+  isOnline,
   language,
   onDeleteExpense,
   title
 }: {
   expenses: ReadonlyArray<Expense>
+  isOnline: boolean
   language: Language
   onDeleteExpense: (expenseId: string) => Promise<void>
   title: string
@@ -556,6 +653,7 @@ function FilteredTransactionsPanel({
       <ExpenseList
         expenses={filteredExpenses}
         groupByDate
+        isOnline={isOnline}
         language={language}
         onDeleteExpense={onDeleteExpense}
         showSigns={activeFilter === "all"}
@@ -658,11 +756,13 @@ function getCurrentMonthTransactions(expenses: ReadonlyArray<Expense>): Expense[
 function TransactionEntry({
   currentUserId,
   fixedType,
+  isOnline,
   language,
   onAddExpense
 }: {
   currentUserId: string
   fixedType: "business" | "personal"
+  isOnline: boolean
   language: Language
   onAddExpense: (input: ExpenseInput) => Promise<void>
 }) {
@@ -686,6 +786,7 @@ function TransactionEntry({
         <AddExpenseForm
           currentUserId={currentUserId}
           fixedType={fixedType}
+          isOnline={isOnline}
           language={language}
           onAddExpense={handleAddExpense}
           users={users}
@@ -703,7 +804,8 @@ function TransactionEntry({
         </p>
       </div>
       <button
-        className="h-10 rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+        className="h-10 rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!isOnline}
         onClick={() => setIsOpen(true)}
         type="button"
       >
@@ -825,6 +927,26 @@ function LogOutIcon() {
   )
 }
 
+function RefreshIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M20 11a8.1 8.1 0 0 0-15.5-2" />
+      <path d="M4 5v4h4" />
+      <path d="M4 13a8.1 8.1 0 0 0 15.5 2" />
+      <path d="M20 19v-4h-4" />
+    </svg>
+  )
+}
+
 function Panel({
   children,
   title
@@ -921,4 +1043,71 @@ function getPageTitle(view: View, language: Language): string {
   }
 
   return translate(language, titleKeys[view])
+}
+
+function readCachedExpenses(userId: string): Expense[] {
+  if (!userId) {
+    return []
+  }
+
+  try {
+    const encodedExpenses = window.localStorage.getItem(`${expenseCacheKey}:${userId}`)
+    const expenses = encodedExpenses ? JSON.parse(encodedExpenses) : []
+    return Array.isArray(expenses) ? expenses.filter(isExpense) : []
+  } catch {
+    return []
+  }
+}
+
+function writeCachedExpenses(userId: string, expenses: ReadonlyArray<Expense>): void {
+  if (!userId) {
+    return
+  }
+
+  window.localStorage.setItem(`${expenseCacheKey}:${userId}`, JSON.stringify(expenses))
+}
+
+function readCachedUser(): User | null {
+  try {
+    const encodedUser = window.localStorage.getItem(userCacheKey)
+    const user = encodedUser ? JSON.parse(encodedUser) : null
+    return isUser(user) ? user : null
+  } catch {
+    return null
+  }
+}
+
+function writeCachedUser(user: User): void {
+  window.localStorage.setItem(userCacheKey, JSON.stringify(user))
+}
+
+function isUser(value: unknown): value is User {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.id === "string" &&
+    typeof record.name === "string" &&
+    typeof record.email === "string"
+  )
+}
+
+function isExpense(value: unknown): value is Expense {
+  if (!value || typeof value !== "object") {
+    return false
+  }
+
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.id === "string" &&
+    (record.type === "business" || record.type === "personal") &&
+    (record.kind === "expense" || record.kind === "income") &&
+    typeof record.amount === "number" &&
+    typeof record.paidByUserId === "string" &&
+    typeof record.ownerUserId === "string" &&
+    typeof record.date === "string" &&
+    typeof record.note === "string"
+  )
 }

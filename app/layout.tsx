@@ -22,7 +22,12 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#1F2937"
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#1F2937",
+  userScalable: false,
+  viewportFit: "cover",
+  width: "device-width"
 }
 
 interface RootLayoutProps {

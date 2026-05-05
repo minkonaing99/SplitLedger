@@ -7,6 +7,7 @@ import type { ExpenseInput, ExpenseType, TransactionKind, User } from "@/lib/typ
 interface AddExpenseFormProps {
   currentUserId: string
   fixedType?: ExpenseType
+  isOnline: boolean
   language: Language
   users: ReadonlyArray<User>
   onAddExpense: (input: ExpenseInput) => Promise<void>
@@ -15,6 +16,7 @@ interface AddExpenseFormProps {
 export function AddExpenseForm({
   currentUserId,
   fixedType,
+  isOnline,
   language,
   users,
   onAddExpense
@@ -23,6 +25,11 @@ export function AddExpenseForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(formData: FormData) {
+    if (!isOnline) {
+      setError(translate(language, "offlineReadOnly"))
+      return
+    }
+
     const type = fixedType ?? readExpenseType(formData)
     const kind = readTransactionKind(formData)
 
@@ -53,6 +60,7 @@ export function AddExpenseForm({
           <input
             autoComplete="off"
             className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+            disabled={!isOnline}
             min="0"
             name="amount"
             placeholder="0.00"
@@ -71,6 +79,7 @@ export function AddExpenseForm({
             <select
               autoComplete="off"
               className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+              disabled={!isOnline}
               name="type"
             >
               <option value="business">{translate(language, "business")}</option>
@@ -84,6 +93,7 @@ export function AddExpenseForm({
         <select
           autoComplete="off"
           className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+          disabled={!isOnline}
           name="kind"
         >
           <option value="expense">{translate(language, "expenses")}</option>
@@ -100,6 +110,7 @@ export function AddExpenseForm({
         <input
           autoComplete="off"
           className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+          disabled={!isOnline}
           defaultValue={new Date().toISOString().slice(0, 10)}
           name="date"
           required
@@ -111,11 +122,17 @@ export function AddExpenseForm({
         <textarea
           autoComplete="off"
           className="min-h-24 w-full resize-none rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 outline-none focus:border-[var(--business)]"
+          disabled={!isOnline}
           name="note"
           placeholder={translate(language, "transactionNotePlaceholder")}
           required
         />
       </label>
+      {!isOnline ? (
+        <div className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm font-medium text-[var(--muted)]">
+          {translate(language, "offlineReadOnly")}
+        </div>
+      ) : null}
       {error ? (
         <div className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm font-medium text-[var(--danger)]">
           {error}
@@ -123,7 +140,7 @@ export function AddExpenseForm({
       ) : null}
       <button
         className="h-11 w-full rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isSubmitting}
+        disabled={isSubmitting || !isOnline}
         type="submit"
       >
         {isSubmitting ? translate(language, "saving") : translate(language, "saveTransaction")}

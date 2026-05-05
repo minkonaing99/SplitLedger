@@ -5,6 +5,7 @@ import type { Expense } from "@/lib/types"
 interface ExpenseListProps {
   expenses: ReadonlyArray<Expense>
   groupByDate?: boolean
+  isOnline: boolean
   language: Language
   onDeleteExpense?: (expenseId: string) => void
   showSigns?: boolean
@@ -13,6 +14,7 @@ interface ExpenseListProps {
 export function ExpenseList({
   expenses,
   groupByDate = false,
+  isOnline,
   language,
   onDeleteExpense,
   showSigns = true
@@ -42,6 +44,7 @@ export function ExpenseList({
               <ExpenseRow
                 expense={expense}
                 hideDate
+                isOnline={isOnline}
                 key={expense.id}
                 language={language}
                 onDeleteExpense={onDeleteExpense}
@@ -59,6 +62,7 @@ export function ExpenseList({
       {expenses.map((expense) => (
         <ExpenseRow
           expense={expense}
+          isOnline={isOnline}
           key={expense.id}
           language={language}
           onDeleteExpense={onDeleteExpense}
@@ -72,12 +76,14 @@ export function ExpenseList({
 function ExpenseRow({
   expense,
   hideDate = false,
+  isOnline,
   language,
   onDeleteExpense,
   showSigns
 }: {
   expense: Expense
   hideDate?: boolean
+  isOnline: boolean
   language: Language
   onDeleteExpense?: (expenseId: string) => void
   showSigns: boolean
@@ -108,7 +114,8 @@ function ExpenseRow({
         {onDeleteExpense ? (
           <button
             aria-label={`Delete ${expense.note}`}
-            className="grid size-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--danger)] sm:size-8"
+            className="grid size-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--muted)] sm:size-8"
+            disabled={!isOnline}
             onClick={() => handleDeleteClick(expense, language, onDeleteExpense)}
             type="button"
           >
