@@ -44,9 +44,15 @@ database.createCollection("expenses", {
           enum: ["business", "personal"]
         },
         kind: {
-          enum: ["expense", "income"]
+          enum: ["expense", "income", "transfer"]
         },
         paymentMethod: {
+          enum: ["cash", "kpay"]
+        },
+        transferFromPaymentMethod: {
+          enum: ["cash", "kpay"]
+        },
+        transferToPaymentMethod: {
           enum: ["cash", "kpay"]
         },
         amount: {
@@ -77,8 +83,12 @@ database.createCollection("expenses", {
 
 database.expenses.createIndex({ workspaceId: 1, type: 1, date: -1 })
 database.expenses.createIndex({ workspaceId: 1, type: 1, kind: 1, date: -1 })
+database.expenses.createIndex({ workspaceId: 1, type: 1, paymentMethod: 1, date: -1 })
 database.expenses.createIndex({ workspaceId: 1, ownerUserId: 1, type: 1, date: -1 })
 database.expenses.createIndex({ id: 1 }, { unique: true })
+
+database.createCollection("monthlyCloses")
+database.monthlyCloses.createIndex({ workspaceId: 1, monthKey: 1 }, { unique: true })
 
 database.createCollection("expenseAudits")
 database.expenseAudits.createIndex({ workspaceId: 1, expenseId: 1, createdAt: -1 })

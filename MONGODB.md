@@ -28,15 +28,15 @@ npm run db:up
 
 The Mongo init script creates the app database, optional app database user, and indexes for `expenses`, `expenseAudits`, `users`, `sessions`, and `loginAttempts`.
 
-## v4.0 Existing Database Backfill
+## Existing Database Migration
 
-v4.0 adds `paymentMethod` to business expenses for Cash/KPay balances. Existing v3.0 business records without this field are still read as `cash`, but run the backfill once after deploying v4.0 so the stored documents are explicit:
+Cash/KPay transfers and monthly closes require an updated `expenses` collection validator and a `monthlyCloses` collection. Existing business records without `paymentMethod` are still read as `cash`, but run the migration once after deploying so stored documents and indexes are explicit:
 
 ```bash
-npm run db:backfill-payment-method
+npm run db:migrate-ledger-features
 ```
 
-This updates only existing business expenses where `paymentMethod` is missing. It does not delete records, drop collections, or recreate the MongoDB volume.
+This updates the validator, creates monthly-close indexes, and backfills only existing business expenses where `paymentMethod` is missing. It does not delete records, drop collections, or recreate the MongoDB volume.
 
 ## Verify Connection
 

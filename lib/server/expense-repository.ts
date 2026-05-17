@@ -20,6 +20,8 @@ interface ExpenseDocument {
   type: ExpenseType
   kind?: TransactionKind
   paymentMethod?: PaymentMethod
+  transferFromPaymentMethod?: PaymentMethod
+  transferToPaymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string
@@ -136,6 +138,8 @@ function toExpense(document: WithId<ExpenseDocument>): Expense {
     type: document.type,
     kind: document.kind ?? "expense",
     paymentMethod: document.type === "business" ? document.paymentMethod ?? "cash" : undefined,
+    transferFromPaymentMethod: document.transferFromPaymentMethod,
+    transferToPaymentMethod: document.transferToPaymentMethod,
     amount: document.amount,
     paidByUserId: document.paidByUserId,
     ownerUserId: document.ownerUserId,

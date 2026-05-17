@@ -272,6 +272,8 @@ export function AppShell() {
         type: input.type,
         kind: input.kind,
         paymentMethod: input.paymentMethod,
+        transferFromPaymentMethod: input.transferFromPaymentMethod,
+        transferToPaymentMethod: input.transferToPaymentMethod,
         amount: input.amount,
         date: input.date,
         note: input.note
@@ -777,11 +779,12 @@ function HomeAction({
   )
 }
 
-type TransactionFilter = "expense" | "income" | "all"
+type TransactionFilter = "expense" | "income" | "transfer" | "all"
 
 const transactionFilters: { id: TransactionFilter; label: string }[] = [
   { id: "expense", label: "expenses" },
   { id: "income", label: "income" },
+  { id: "transfer", label: "transfer" },
   { id: "all", label: "all" }
 ]
 
@@ -828,7 +831,7 @@ function FilteredTransactionsPanel({
               </option>
             ))}
           </select>
-          <div className="grid grid-cols-3 rounded-md border border-[var(--line)] bg-[var(--surface-muted)] p-1">
+          <div className="grid grid-cols-4 rounded-md border border-[var(--line)] bg-[var(--surface-muted)] p-1">
             {transactionFilters.map((filter) => (
               <button
                 className={getFilterButtonClassName(activeFilter === filter.id)}
@@ -1299,7 +1302,7 @@ function isExpense(value: unknown): value is Expense {
   return (
     typeof record.id === "string" &&
     (record.type === "business" || record.type === "personal") &&
-    (record.kind === "expense" || record.kind === "income") &&
+    (record.kind === "expense" || record.kind === "income" || record.kind === "transfer") &&
     typeof record.amount === "number" &&
     typeof record.paidByUserId === "string" &&
     typeof record.ownerUserId === "string" &&

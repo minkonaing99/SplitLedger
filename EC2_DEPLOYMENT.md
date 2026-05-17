@@ -1,6 +1,6 @@
-# SplitLedger v4.0 EC2 Deployment Guide
+# SplitLedger v4.1 EC2 Deployment Guide
 
-This guide deploys SplitLedger v4.0 on an Amazon EC2 Ubuntu server with:
+This guide deploys SplitLedger v4.1 on an Amazon EC2 Ubuntu server with:
 
 - Next.js production server on `127.0.0.1:3001`
 - MongoDB in Docker Compose, bound to `127.0.0.1:27017`
@@ -117,13 +117,13 @@ docker compose version
 docker ps
 ```
 
-## 6. Clone The v4.0 Branch
+## 6. Clone The v4.1 Branch
 
 ```bash
 sudo mkdir -p /var/www
 sudo chown ubuntu:ubuntu /var/www
 cd /var/www
-git clone -b v4.0 YOUR_GITHUB_REPO splitledger
+git clone -b v4.1 YOUR_GITHUB_REPO splitledger
 cd /var/www/splitledger
 ```
 
@@ -485,7 +485,7 @@ Restart the app after restore:
 sudo systemctl restart splitledger
 ```
 
-## 18. Upgrade From v3.0 To v4.0 Without Deleting MongoDB
+## 18. Upgrade From v3.0 To v4.1 Without Deleting MongoDB
 
 Use this path when an EC2 server already has a v3.0 deployment and real data in the Docker MongoDB volume.
 
@@ -524,8 +524,8 @@ Stop only the app while upgrading. Keep MongoDB running:
 cd /var/www/splitledger
 sudo systemctl stop splitledger
 git fetch origin
-git switch v4.0
-git pull --ff-only origin v4.0
+git switch v4.1
+git pull --ff-only origin v4.1
 npm install
 npm run typecheck
 npm test
@@ -533,10 +533,10 @@ npm run build
 docker compose --env-file /etc/splitledger/splitledger.env up -d mongo
 ```
 
-Run the v4.0 data backfill. This preserves existing records and only fills missing `paymentMethod` on existing business expenses with `cash`:
+Run the ledger data migration. This preserves existing records, updates the MongoDB validator for transfers, creates monthly-close indexes, and fills missing `paymentMethod` on existing business expenses with `cash`:
 
 ```bash
-npm run db:backfill-payment-method
+npm run db:migrate-ledger-features
 ```
 
 Start the app again:

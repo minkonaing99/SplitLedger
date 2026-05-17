@@ -1,6 +1,6 @@
 {
   "name": "splitledger",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "db:up": "docker compose up -d mongo",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f mongo",
-    "db:backfill-payment-method": "node --env-file=.env.local scripts/backfill-payment-method.ts"
+    "db:backfill-payment-method": "node --env-file=.env.local scripts/backfill-payment-method.ts",
+    "db:migrate-ledger-features": "node --env-file=.env.local scripts/migrate-ledger-features.ts"
   },
   "dependencies": {
     "mongodb": "^6.21.0",

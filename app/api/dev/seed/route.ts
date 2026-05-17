@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { initialExpenses } from "@/lib/mock-data"
 import { ensureAuthIndexes, upsertUser } from "@/lib/server/auth-repository"
 import { ensureExpenseIndexes } from "@/lib/server/expense-repository"
+import { ensureMonthlyCloseIndexes } from "@/lib/server/monthly-close-repository"
 import { getMongoConnection } from "@/lib/server/mongodb"
 import { hashPassword } from "@/lib/server/passwords"
 import { validateTrustedOrigin } from "@/lib/server/security"
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
 
   await ensureAuthIndexes()
   await ensureExpenseIndexes()
+  await ensureMonthlyCloseIndexes()
   const seededUsers = await seedUsers()
   const migratedExpenseUsers = await migrateLegacyExpenseUsers()
   const removedLegacyUsers = await removeLegacyUsers()

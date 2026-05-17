@@ -35,6 +35,8 @@ export function AddExpenseForm({
   const [selectedType, setSelectedType] = useState<ExpenseType>(fixedType ?? "business")
   const [selectedKind, setSelectedKind] = useState<TransactionKind>("expense")
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>("cash")
+  const [transferFromPaymentMethod, setTransferFromPaymentMethod] = useState<PaymentMethod>("cash")
+  const [transferToPaymentMethod, setTransferToPaymentMethod] = useState<PaymentMethod>("kpay")
 
   async function handleSubmit(formData: FormData) {
     if (!isOnline) {
@@ -45,6 +47,8 @@ export function AddExpenseForm({
     const type = fixedType ?? readExpenseType(formData)
     const kind = readTransactionKind(formData)
     const paymentMethod = type === "business" ? readPaymentMethod(formData) : undefined
+    const transferFrom = readTransferPaymentMethod(formData, "transferFromPaymentMethod")
+    const transferTo = readTransferPaymentMethod(formData, "transferToPaymentMethod")
 
     try {
       setIsSubmitting(true)
@@ -52,12 +56,14 @@ export function AddExpenseForm({
       await onAddExpense({
         type,
         kind,
-        paymentMethod,
+        paymentMethod: kind === "transfer" ? undefined : paymentMethod,
+        transferFromPaymentMethod: kind === "transfer" ? transferFrom : undefined,
+        transferToPaymentMethod: kind === "transfer" ? transferTo : undefined,
         amount: readAmount(formData),
         paidByUserId: currentUserId,
         ownerUserId: currentUserId,
         date: readString(formData, "date", new Date().toISOString().slice(0, 10)),
-        note: readString(formData, "note", "Untitled expense")
+        note: readString(formData, "note", getFallbackNote(kind, transferFrom, transferTo, language))
       })
       setAmount("")
       setNote("")
@@ -105,7 +111,12 @@ export function AddExpenseForm({
                 disabled={!isOnline}
                 isActive={selectedType === "personal"}
                 label={translate(language, "personal")}
-                onClick={() => setSelectedType("personal")}
+                onClick={() => {
+                  setSelectedType("personal")
+                  if (selectedKind === "transfer") {
+                    setSelectedKind("expense")
+                  }
+                }}
               />
             </SegmentedControl>
           )}
@@ -114,7 +125,7 @@ export function AddExpenseForm({
       </div>
       <div className="space-y-1 text-sm font-medium">
         <div>{translate(language, "category")}</div>
-        <SegmentedControl>
+        <SegmentedControl columns={selectedType === "business" ? 3 : 2}>
           <SegmentButton
             disabled={!isOnline}
             isActive={selectedKind === "expense"}
@@ -127,10 +138,47 @@ export function AddExpenseForm({
             label={translate(language, "income")}
             onClick={() => setSelectedKind("income")}
           />
+          {selectedType === "business" ? (
+            <SegmentButton
+              disabled={!isOnline}
+              isActive={selectedKind === "transfer"}
+              label={translate(language, "transfer")}
+              onClick={() => setSelectedKind("transfer")}
+            />
+          ) : null}
         </SegmentedControl>
         <input name="kind" type="hidden" value={selectedKind} />
       </div>
-      {selectedType === "business" ? (
+      {selectedType === "business" && selectedKind === "transfer" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PaymentMethodField
+            disabled={!isOnline}
+            label={translate(language, "transferFrom")}
+            language={language}
+            name="transferFromPaymentMethod"
+            onChange={(nextPaymentMethod) => {
+              setTransferFromPaymentMethod(nextPaymentMethod)
+              if (nextPaymentMethod === transferToPaymentMethod) {
+                setTransferToPaymentMethod(nextPaymentMethod === "cash" ? "kpay" : "cash")
+              }
+            }}
+            value={transferFromPaymentMethod}
+          />
+          <PaymentMethodField
+            disabled={!isOnline}
+            label={translate(language, "transferTo")}
+            language={language}
+            name="transferToPaymentMethod"
+            onChange={(nextPaymentMethod) => {
+              setTransferToPaymentMethod(nextPaymentMethod)
+              if (nextPaymentMethod === transferFromPaymentMethod) {
+                setTransferFromPaymentMethod(nextPaymentMethod === "cash" ? "kpay" : "cash")
+              }
+            }}
+            value={transferToPaymentMethod}
+          />
+        </div>
+      ) : selectedType === "business" ? (
         <div className="space-y-1 text-sm font-medium">
           <div>{translate(language, "paymentMethod")}</div>
           <SegmentedControl>
@@ -164,8 +212,10 @@ export function AddExpenseForm({
         ))}
       </div>
       <div className="rounded-lg bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted)]">
-        {selectedType === "business"
-          ? translate(language, "paymentMethodHint")
+        {selectedKind === "transfer"
+          ? translate(language, "transferHint")
+          : selectedType === "business"
+            ? translate(language, "paymentMethodHint")
           : `${translate(language, "personalPrivacyHintPrefix")} ${getUserName(users, currentUserId)}.`}
       </div>
       <label className="block space-y-1 text-sm font-medium">
@@ -213,10 +263,53 @@ export function AddExpenseForm({
   )
 }
 
-function SegmentedControl({ children }: { children: React.ReactNode }) {
+function SegmentedControl({
+  children,
+  columns = 2
+}: {
+  children: React.ReactNode
+  columns?: 2 | 3
+}) {
   return (
-    <div className="grid grid-cols-2 rounded-md border border-[var(--line)] bg-[var(--surface-muted)] p-1">
+    <div className={`${columns === 3 ? "grid-cols-3" : "grid-cols-2"} grid rounded-md border border-[var(--line)] bg-[var(--surface-muted)] p-1`}>
       {children}
+    </div>
+  )
+}
+
+function PaymentMethodField({
+  disabled,
+  label,
+  language,
+  name,
+  onChange,
+  value
+}: {
+  disabled: boolean
+  label: string
+  language: Language
+  name: string
+  onChange: (paymentMethod: PaymentMethod) => void
+  value: PaymentMethod
+}) {
+  return (
+    <div className="space-y-1 text-sm font-medium">
+      <div>{label}</div>
+      <SegmentedControl>
+        <SegmentButton
+          disabled={disabled}
+          isActive={value === "cash"}
+          label={translate(language, "cash")}
+          onClick={() => onChange("cash")}
+        />
+        <SegmentButton
+          disabled={disabled}
+          isActive={value === "kpay"}
+          label={translate(language, "kpay")}
+          onClick={() => onChange("kpay")}
+        />
+      </SegmentedControl>
+      <input name={name} type="hidden" value={value} />
     </div>
   )
 }
@@ -263,11 +356,34 @@ function readExpenseTypeFromValue(value: string): ExpenseType {
 }
 
 function readTransactionKind(formData: FormData): TransactionKind {
-  return formData.get("kind") === "income" ? "income" : "expense"
+  const kind = formData.get("kind")
+
+  if (kind === "transfer") {
+    return "transfer"
+  }
+
+  return kind === "income" ? "income" : "expense"
 }
 
 function readPaymentMethod(formData: FormData): PaymentMethod {
   return formData.get("paymentMethod") === "kpay" ? "kpay" : "cash"
+}
+
+function readTransferPaymentMethod(formData: FormData, key: string): PaymentMethod {
+  return formData.get(key) === "kpay" ? "kpay" : "cash"
+}
+
+function getFallbackNote(
+  kind: TransactionKind,
+  transferFrom: PaymentMethod,
+  transferTo: PaymentMethod,
+  language: Language
+): string {
+  if (kind === "transfer") {
+    return `${translate(language, transferFrom)} ${translate(language, "to")} ${translate(language, transferTo)}`
+  }
+
+  return "Untitled expense"
 }
 
 function readString(formData: FormData, key: string, fallback: string): string {

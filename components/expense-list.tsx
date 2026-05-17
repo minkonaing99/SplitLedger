@@ -5,6 +5,7 @@ import {
   formatCurrency,
   formatDisplayDate,
   getBusinessPaymentMethod,
+  getTransferPaymentMethods,
   sumNetAmount
 } from "@/lib/expenses"
 import { translate, type Language } from "@/lib/i18n"
@@ -118,7 +119,7 @@ function ExpenseRow({
           </span>
           {expense.type === "business" ? (
             <span className="rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
-              {translate(language, getBusinessPaymentMethod(expense))}
+              {getPaymentMethodLabel(expense, language)}
             </span>
           ) : null}
         </div>
@@ -223,16 +224,38 @@ function getKindClassName(kind: Expense["kind"]): string {
     return `${base} bg-[var(--success-soft)] text-[var(--success)]`
   }
 
+  if (kind === "transfer") {
+    return `${base} bg-[var(--business-soft)] text-[var(--business)]`
+  }
+
   return `${base} bg-[var(--surface-muted)] text-[var(--muted)]`
 }
 
 function getAmountClassName(expense: Expense): string {
-  const color = expense.kind === "income" ? "text-[var(--success)]" : "text-[var(--text)]"
+  const color =
+    expense.kind === "income"
+      ? "text-[var(--success)]"
+      : expense.kind === "transfer"
+        ? "text-[var(--muted)]"
+        : "text-[var(--text)]"
   return `min-w-20 text-right text-sm font-semibold leading-none sm:min-w-24 ${color}`
 }
 
 function getAmountSign(expense: Expense): string {
+  if (expense.kind === "transfer") {
+    return ""
+  }
+
   return expense.kind === "income" ? "+" : "-"
+}
+
+function getPaymentMethodLabel(expense: Expense, language: Language): string {
+  if (expense.kind === "transfer") {
+    const transfer = getTransferPaymentMethods(expense)
+    return `${translate(language, transfer.from)} ${translate(language, "to")} ${translate(language, transfer.to)}`
+  }
+
+  return translate(language, getBusinessPaymentMethod(expense))
 }
 
 function getGroupSubtotalClassName(expenses: ReadonlyArray<Expense>): string {

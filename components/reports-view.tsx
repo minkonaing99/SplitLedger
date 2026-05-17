@@ -1,20 +1,23 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SummaryCard } from "@/components/summary-card"
 import {
   formatCompactCurrency,
   formatCurrency,
   formatDisplayDate,
   getBusinessPaymentMethod,
+  getNetAmount,
+  getTransferPaymentMethods,
   sumExpenseOutflow,
   sumIncome,
   sumNetAmount,
   sumNetAmountByPaymentMethod,
+  sumTransfers,
   toDateKey
 } from "@/lib/expenses"
 import { translate, type Language } from "@/lib/i18n"
-import type { Expense } from "@/lib/types"
+import type { Expense, MonthlyClose } from "@/lib/types"
 
 interface ReportsViewProps {
   currentUserId: string
@@ -39,6 +42,8 @@ interface TopExpenseRow {
   type: Expense["type"]
   kind: Expense["kind"]
   paymentMethod?: Expense["paymentMethod"]
+  transferFromPaymentMethod?: Expense["transferFromPaymentMethod"]
+  transferToPaymentMethod?: Expense["transferToPaymentMethod"]
   amount: number
 }
 
@@ -46,11 +51,69 @@ export function ReportsView({ currentUserId, expenses, language }: ReportsViewPr
   const defaultRange = useMemo(() => getDefaultRange(), [])
   const [startDate, setStartDate] = useState(defaultRange.startDate)
   const [endDate, setEndDate] = useState(defaultRange.endDate)
+  const [monthlyCloses, setMonthlyCloses] = useState<MonthlyClose[]>([])
+  const [closeError, setCloseError] = useState<string | null>(null)
+  const [isClosingMonth, setIsClosingMonth] = useState(false)
 
   const report = useMemo(
     () => buildReport(expenses, currentUserId, startDate, endDate),
     [currentUserId, endDate, expenses, startDate]
   )
+  const activeMonthKey = startDate.slice(0, 7)
+  const activeMonthlyClose = monthlyCloses.find((close) => close.monthKey === activeMonthKey)
+
+  useEffect(() => {
+    void loadMonthlyCloses()
+  }, [])
+
+  async function loadMonthlyCloses() {
+    try {
+      const response = await fetch("/api/monthly-closes", { cache: "no-store" })
+      const result = (await response.json()) as {
+        error?: string
+        monthlyCloses?: MonthlyClose[]
+      }
+
+      if (response.ok && result.monthlyCloses) {
+        setMonthlyCloses(result.monthlyCloses)
+      }
+    } catch {
+      setCloseError("Unable to load monthly closes.")
+    }
+  }
+
+  async function handleCloseMonth() {
+    setIsClosingMonth(true)
+    setCloseError(null)
+
+    try {
+      const response = await fetch("/api/monthly-closes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ monthKey: activeMonthKey })
+      })
+      const result = (await response.json()) as {
+        error?: string
+        monthlyClose?: MonthlyClose
+      }
+
+      if (!response.ok || !result.monthlyClose) {
+        setCloseError(result.error ?? "Unable to close month.")
+        return
+      }
+
+      setMonthlyCloses((currentCloses) => [
+        result.monthlyClose as MonthlyClose,
+        ...currentCloses.filter((close) => close.monthKey !== activeMonthKey)
+      ])
+    } catch {
+      setCloseError("Unable to close month.")
+    } finally {
+      setIsClosingMonth(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -109,6 +172,16 @@ export function ReportsView({ currentUserId, expenses, language }: ReportsViewPr
         incomeTotal={report.incomeTotal}
         kpayTotal={report.kpayTotal}
         language={language}
+        transferTotal={report.transferTotal}
+      />
+
+      <MonthlyClosePanel
+        closeError={closeError}
+        isClosingMonth={isClosingMonth}
+        language={language}
+        monthKey={activeMonthKey}
+        monthlyClose={activeMonthlyClose}
+        onCloseMonth={handleCloseMonth}
       />
 
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
@@ -245,14 +318,14 @@ function TopExpenses({
               <span className={getKindClassName(row.kind)}>{translate(language, row.kind)}</span>
               {row.type === "business" ? (
                 <span className="rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
-                  {translate(language, row.paymentMethod ?? "cash")}
+                  {getPaymentMethodLabel(row, language)}
                 </span>
               ) : null}
             </div>
             <p className="mt-1 text-xs text-[var(--muted)]">{formatDisplayDate(row.date)}</p>
           </div>
           <div className={getAmountClassName(row.kind)}>
-            {row.kind === "income" ? "+" : "-"}
+            {getAmountSign(row.kind)}
             {formatCompactCurrency(row.amount)}
           </div>
         </div>
@@ -266,15 +339,17 @@ function ReportBreakdown({
   expenseTotal,
   incomeTotal,
   kpayTotal,
-  language
+  language,
+  transferTotal
 }: {
   cashTotal: number
   expenseTotal: number
   incomeTotal: number
   kpayTotal: number
   language: Language
+  transferTotal: number
 }) {
-  const movementMax = Math.max(incomeTotal, expenseTotal, 1)
+  const movementMax = Math.max(incomeTotal, expenseTotal, transferTotal, 1)
   const paymentMax = Math.max(Math.abs(cashTotal), Math.abs(kpayTotal), 1)
 
   return (
@@ -292,6 +367,12 @@ function ReportBreakdown({
           value={expenseTotal}
           width={getBarWidth(expenseTotal, movementMax)}
         />
+        <BreakdownBar
+          label={translate(language, "transfer")}
+          tone="neutral"
+          value={transferTotal}
+          width={getBarWidth(transferTotal, movementMax)}
+        />
       </BreakdownPanel>
       <BreakdownPanel title={translate(language, "cashKpayBalance")}>
         <BreakdownBar
@@ -308,6 +389,111 @@ function ReportBreakdown({
         />
       </BreakdownPanel>
     </section>
+  )
+}
+
+function MonthlyClosePanel({
+  closeError,
+  isClosingMonth,
+  language,
+  monthKey,
+  monthlyClose,
+  onCloseMonth
+}: {
+  closeError: string | null
+  isClosingMonth: boolean
+  language: Language
+  monthKey: string
+  monthlyClose?: MonthlyClose
+  onCloseMonth: () => void
+}) {
+  return (
+    <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
+      <div className="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div>
+          <h2 className="text-base font-semibold">{translate(language, "monthlyClose")}</h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+            {formatMonthLabel(monthKey, language)} - {translate(language, "monthlyCloseDescription")}
+          </p>
+        </div>
+        <button
+          className="h-10 rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isClosingMonth}
+          onClick={onCloseMonth}
+          type="button"
+        >
+          {isClosingMonth ? translate(language, "saving") : translate(language, "closeMonth")}
+        </button>
+      </div>
+      {closeError ? (
+        <div className="mb-4 rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm font-medium text-[var(--danger)]">
+          {closeError}
+        </div>
+      ) : null}
+      {monthlyClose ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <CloseBalanceGroup
+              cash={monthlyClose.cashOpeningBalance}
+              kpay={monthlyClose.kpayOpeningBalance}
+              label={translate(language, "openingBalance")}
+            />
+            <CloseBalanceGroup
+              cash={monthlyClose.cashClosingBalance}
+              kpay={monthlyClose.kpayClosingBalance}
+              label={translate(language, "closingBalance")}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <MiniCloseMetric label={translate(language, "income")} value={monthlyClose.incomeTotal} />
+            <MiniCloseMetric label={translate(language, "expenses")} value={monthlyClose.expenseTotal} />
+            <MiniCloseMetric label={translate(language, "transfer")} value={monthlyClose.transferTotal} />
+          </div>
+          <p className="text-xs text-[var(--muted)]">
+            {translate(language, "closedAt")} {formatClosedAt(monthlyClose.closedAt)}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+          {translate(language, "noMonthlyClose")}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function CloseBalanceGroup({
+  cash,
+  kpay,
+  label
+}: {
+  cash: number
+  kpay: number
+  label: string
+}) {
+  return (
+    <div className="rounded-md bg-[var(--surface-muted)] p-3">
+      <div className="mb-2 text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
+      <div className="grid gap-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span>Cash</span>
+          <span className="font-semibold">{formatCurrency(cash)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>KPay</span>
+          <span className="font-semibold">{formatCurrency(kpay)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MiniCloseMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-[var(--line)] p-3">
+      <div className="text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
+      <div className="mt-1 text-base font-semibold">{formatCompactCurrency(value)}</div>
+    </div>
   )
 }
 
@@ -333,23 +519,40 @@ function BreakdownBar({
   width
 }: {
   label: string
-  tone: "danger" | "success"
+  tone: "danger" | "neutral" | "success"
   value: number
   width: number
 }) {
+  const toneClassName = getBreakdownToneClassName(tone)
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
         <span className="font-medium">{label}</span>
-        <span className={tone === "success" ? "font-semibold text-[var(--success)]" : "font-semibold text-[var(--danger)]"}>
+        <span className={`font-semibold ${toneClassName.text}`}>
           {formatCompactCurrency(value)}
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-muted)]">
-        <div className={`h-full rounded-full ${tone === "success" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`} style={{ width: `${width}%` }} />
+        <div className={`h-full rounded-full ${toneClassName.bar}`} style={{ width: `${width}%` }} />
       </div>
     </div>
   )
+}
+
+function getBreakdownToneClassName(tone: "danger" | "neutral" | "success"): {
+  bar: string
+  text: string
+} {
+  if (tone === "success") {
+    return { bar: "bg-[var(--success)]", text: "text-[var(--success)]" }
+  }
+
+  if (tone === "danger") {
+    return { bar: "bg-[var(--danger)]", text: "text-[var(--danger)]" }
+  }
+
+  return { bar: "bg-[var(--business)]", text: "text-[var(--business)]" }
 }
 
 function buildReport(
@@ -367,7 +570,7 @@ function buildReport(
   )
   const businessExpenses = filteredExpenses.filter((expense) => expense.type === "business")
   const incomeTransactions = filteredExpenses.filter((expense) => expense.kind === "income")
-  const expenseTransactions = filteredExpenses.filter((expense) => expense.kind !== "income")
+  const expenseTransactions = filteredExpenses.filter((expense) => expense.kind === "expense")
   const personalExpenses = filteredExpenses.filter((expense) => expense.type === "personal")
   const dailyRows = buildDailyRows(filteredExpenses)
   const total = sumNetAmount(filteredExpenses)
@@ -381,6 +584,7 @@ function buildReport(
     incomeCount: incomeTransactions.length,
     expenseTotal: sumExpenseOutflow(expenseTransactions),
     expenseCount: expenseTransactions.length,
+    transferTotal: sumTransfers(businessExpenses),
     personalTotal: sumNetAmount(personalExpenses),
     personalCount: personalExpenses.length,
     total,
@@ -412,25 +616,17 @@ function buildDailyRows(expenses: ReadonlyArray<Expense>): DailyReportRow[] {
       ...current,
       business:
         current.business +
-        (expense.type === "business"
-          ? expense.kind === "income"
-            ? expense.amount
-            : -expense.amount
-          : 0),
+        (expense.type === "business" ? getNetAmount(expense) : 0),
       income:
         current.income +
         (expense.type === "business" && expense.kind === "income" ? expense.amount : 0),
       expenses:
         current.expenses +
-        (expense.type === "business" && expense.kind !== "income" ? expense.amount : 0),
+        (expense.type === "business" && expense.kind === "expense" ? expense.amount : 0),
       personal:
         current.personal +
-        (expense.type === "personal"
-          ? expense.kind === "income"
-            ? expense.amount
-            : -expense.amount
-          : 0),
-      total: current.total + (expense.kind === "income" ? expense.amount : -expense.amount),
+        (expense.type === "personal" ? getNetAmount(expense) : 0),
+      total: current.total + getNetAmount(expense),
       count: current.count + 1
     }
 
@@ -449,7 +645,7 @@ function exportReportCsv(expenses: ReadonlyArray<Expense>) {
       String(expense.amount),
       expense.kind,
       expense.type,
-      expense.type === "business" ? getBusinessPaymentMethod(expense) : ""
+      expense.type === "business" ? getPaymentMethodLabel(expense, "en") : ""
     ])
   ]
   const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")
@@ -504,12 +700,62 @@ function getKindClassName(kind: Expense["kind"]): string {
     return `${base} bg-[var(--success-soft)] text-[var(--success)]`
   }
 
+  if (kind === "transfer") {
+    return `${base} bg-[var(--business-soft)] text-[var(--business)]`
+  }
+
   return `${base} bg-[var(--surface-muted)] text-[var(--muted)]`
 }
 
 function getAmountClassName(kind: Expense["kind"]): string {
-  const color = kind === "income" ? "text-[var(--success)]" : "text-[var(--text)]"
+  const color =
+    kind === "income"
+      ? "text-[var(--success)]"
+      : kind === "transfer"
+        ? "text-[var(--muted)]"
+        : "text-[var(--text)]"
   return `text-right text-sm font-semibold ${color}`
+}
+
+function getAmountSign(kind: Expense["kind"]): string {
+  if (kind === "transfer") {
+    return ""
+  }
+
+  return kind === "income" ? "+" : "-"
+}
+
+function getPaymentMethodLabel(expense: TopExpenseRow | Expense, language: Language): string {
+  if (expense.kind === "transfer") {
+    const transfer = getTransferPaymentMethods(expense as Expense)
+    return `${translate(language, transfer.from)} ${translate(language, "to")} ${translate(language, transfer.to)}`
+  }
+
+  return translate(language, expense.paymentMethod ?? getBusinessPaymentMethod(expense as Expense))
+}
+
+function formatMonthLabel(monthKey: string, language: Language): string {
+  const date = new Date(`${monthKey}-01T00:00:00.000Z`)
+
+  if (Number.isNaN(date.getTime())) {
+    return monthKey
+  }
+
+  return new Intl.DateTimeFormat(language === "my" ? "my-MM" : "en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date)
+}
+
+function formatClosedAt(closedAt: string): string {
+  const date = new Date(closedAt)
+
+  if (Number.isNaN(date.getTime())) {
+    return closedAt
+  }
+
+  return date.toLocaleString()
 }
 
 function getReportAmountClassName(amount: number): string {
