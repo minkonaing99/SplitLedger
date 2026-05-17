@@ -72,12 +72,12 @@ export async function insertExpense(input: ExpenseInput): Promise<Expense> {
     id: crypto.randomUUID()
   }
 
-  await collection.insertOne({
+  await collection.insertOne(omitUndefined({
     ...expense,
     workspaceId: DEFAULT_WORKSPACE_ID,
     createdAt: now,
     updatedAt: now
-  })
+  }))
   await insertExpenseAudit({
     action: "create",
     actorUserId: input.paidByUserId,
@@ -130,6 +130,12 @@ export async function ensureExpenseIndexes(): Promise<void> {
 async function getExpensesCollection(): Promise<Collection<ExpenseDocument>> {
   const { db } = await getMongoConnection()
   return db.collection<ExpenseDocument>("expenses")
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as T
 }
 
 function toExpense(document: WithId<ExpenseDocument>): Expense {
