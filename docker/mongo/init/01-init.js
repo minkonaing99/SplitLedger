@@ -46,6 +46,9 @@ database.createCollection("expenses", {
         kind: {
           enum: ["expense", "income"]
         },
+        paymentMethod: {
+          enum: ["cash", "kpay"]
+        },
         amount: {
           bsonType: ["double", "int", "long", "decimal"]
         },

@@ -1,5 +1,6 @@
 export type ExpenseType = "business" | "personal"
 export type TransactionKind = "expense" | "income"
+export type PaymentMethod = "cash" | "kpay"
 
 export interface User {
   id: string
@@ -11,6 +12,7 @@ export interface Expense {
   id: string
   type: ExpenseType
   kind: TransactionKind
+  paymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string
@@ -21,6 +23,7 @@ export interface Expense {
 export interface ExpenseInput {
   type: ExpenseType
   kind: TransactionKind
+  paymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string

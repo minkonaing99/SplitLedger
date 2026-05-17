@@ -28,6 +28,16 @@ npm run db:up
 
 The Mongo init script creates the app database, optional app database user, and indexes for `expenses`, `expenseAudits`, `users`, `sessions`, and `loginAttempts`.
 
+## v4.0 Existing Database Backfill
+
+v4.0 adds `paymentMethod` to business expenses for Cash/KPay balances. Existing v3.0 business records without this field are still read as `cash`, but run the backfill once after deploying v4.0 so the stored documents are explicit:
+
+```bash
+npm run db:backfill-payment-method
+```
+
+This updates only existing business expenses where `paymentMethod` is missing. It does not delete records, drop collections, or recreate the MongoDB volume.
+
 ## Verify Connection
 
 With the Next.js dev server running:

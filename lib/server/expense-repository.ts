@@ -4,7 +4,13 @@ import {
   buildVisibleExpenseFilter
 } from "@/lib/server/expense-access"
 import { getMongoConnection } from "@/lib/server/mongodb"
-import type { Expense, ExpenseInput, ExpenseType, TransactionKind } from "@/lib/types"
+import type {
+  Expense,
+  ExpenseInput,
+  ExpenseType,
+  PaymentMethod,
+  TransactionKind
+} from "@/lib/types"
 
 const DEFAULT_WORKSPACE_ID = "family-business"
 
@@ -13,6 +19,7 @@ interface ExpenseDocument {
   workspaceId: string
   type: ExpenseType
   kind?: TransactionKind
+  paymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string
@@ -111,6 +118,7 @@ export async function ensureExpenseIndexes(): Promise<void> {
   await Promise.all([
     collection.createIndex({ workspaceId: 1, type: 1, date: -1 }),
     collection.createIndex({ workspaceId: 1, type: 1, kind: 1, date: -1 }),
+    collection.createIndex({ workspaceId: 1, type: 1, paymentMethod: 1, date: -1 }),
     collection.createIndex({ workspaceId: 1, ownerUserId: 1, type: 1, date: -1 }),
     collection.createIndex({ id: 1 }, { unique: true }),
     ensureExpenseAuditIndexes()
@@ -127,6 +135,7 @@ function toExpense(document: WithId<ExpenseDocument>): Expense {
     id: document.id,
     type: document.type,
     kind: document.kind ?? "expense",
+    paymentMethod: document.type === "business" ? document.paymentMethod ?? "cash" : undefined,
     amount: document.amount,
     paidByUserId: document.paidByUserId,
     ownerUserId: document.ownerUserId,

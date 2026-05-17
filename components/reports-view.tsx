@@ -6,9 +6,11 @@ import {
   formatCompactCurrency,
   formatCurrency,
   formatDisplayDate,
+  getBusinessPaymentMethod,
   sumExpenseOutflow,
   sumIncome,
   sumNetAmount,
+  sumNetAmountByPaymentMethod,
   toDateKey
 } from "@/lib/expenses"
 import { translate, type Language } from "@/lib/i18n"
@@ -36,6 +38,7 @@ interface TopExpenseRow {
   note: string
   type: Expense["type"]
   kind: Expense["kind"]
+  paymentMethod?: Expense["paymentMethod"]
   amount: number
 }
 
@@ -76,29 +79,37 @@ export function ReportsView({ currentUserId, expenses, language }: ReportsViewPr
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          detail={`${report.businessCount} shared records`}
+          detail={`${report.businessCount} ${translate(language, "sharedRecords")}`}
           label={translate(language, "businessNet")}
           tone="business"
           value={formatCompactCurrency(report.businessTotal)}
         />
         <SummaryCard
-          detail={`${report.incomeCount} income records`}
+          detail={`${report.incomeCount} ${translate(language, "income")} ${translate(language, "records")}`}
           label={translate(language, "income")}
           value={formatCompactCurrency(report.incomeTotal)}
         />
         <SummaryCard
-          detail={`${report.expenseCount} expense records`}
+          detail={`${report.expenseCount} ${translate(language, "expenses")} ${translate(language, "records")}`}
           label={translate(language, "expenses")}
           tone="personal"
           value={formatCompactCurrency(report.expenseTotal)}
         />
         <SummaryCard
-          detail={`${report.personalCount} private records`}
+          detail={`${report.personalCount} ${translate(language, "personal")} ${translate(language, "records")}`}
           label={translate(language, "personalNet")}
           tone="personal"
           value={formatCompactCurrency(report.personalTotal)}
         />
       </div>
+
+      <ReportBreakdown
+        cashTotal={report.cashTotal}
+        expenseTotal={report.expenseTotal}
+        incomeTotal={report.incomeTotal}
+        kpayTotal={report.kpayTotal}
+        language={language}
+      />
 
       <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -172,7 +183,7 @@ function DailyTrend({
             <th className="px-3 py-2 text-right">{translate(language, "expenses")}</th>
             <th className="px-3 py-2 text-right">{translate(language, "personalNet")}</th>
             <th className="px-3 py-2">{translate(language, "records")}</th>
-            <th className="py-2 pl-3 text-right">Net</th>
+            <th className="py-2 pl-3 text-right">{translate(language, "net")}</th>
           </tr>
         </thead>
         <tbody>
@@ -191,7 +202,7 @@ function DailyTrend({
                 <div className="flex min-w-40 items-center justify-end gap-3">
                   <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--surface-muted)]">
                     <div
-                      className="h-full rounded-full bg-[var(--business)]"
+                      className={`h-full rounded-full ${getBarToneClassName(row.total)}`}
                       style={{ width: `${getBarWidth(row.total, maxTotal)}%` }}
                     />
                   </div>
@@ -232,6 +243,11 @@ function TopExpenses({
               <h3 className="truncate text-sm font-semibold">{row.note}</h3>
               <span className={getTypeClassName(row.type)}>{translate(language, row.type)}</span>
               <span className={getKindClassName(row.kind)}>{translate(language, row.kind)}</span>
+              {row.type === "business" ? (
+                <span className="rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
+                  {translate(language, row.paymentMethod ?? "cash")}
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 text-xs text-[var(--muted)]">{formatDisplayDate(row.date)}</p>
           </div>
@@ -241,6 +257,97 @@ function TopExpenses({
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ReportBreakdown({
+  cashTotal,
+  expenseTotal,
+  incomeTotal,
+  kpayTotal,
+  language
+}: {
+  cashTotal: number
+  expenseTotal: number
+  incomeTotal: number
+  kpayTotal: number
+  language: Language
+}) {
+  const movementMax = Math.max(incomeTotal, expenseTotal, 1)
+  const paymentMax = Math.max(Math.abs(cashTotal), Math.abs(kpayTotal), 1)
+
+  return (
+    <section className="grid gap-3 lg:grid-cols-2">
+      <BreakdownPanel title={translate(language, "reportSnapshot")}>
+        <BreakdownBar
+          label={translate(language, "income")}
+          tone="success"
+          value={incomeTotal}
+          width={getBarWidth(incomeTotal, movementMax)}
+        />
+        <BreakdownBar
+          label={translate(language, "expenses")}
+          tone="danger"
+          value={expenseTotal}
+          width={getBarWidth(expenseTotal, movementMax)}
+        />
+      </BreakdownPanel>
+      <BreakdownPanel title={translate(language, "cashKpayBalance")}>
+        <BreakdownBar
+          label={translate(language, "cash")}
+          tone={cashTotal >= 0 ? "success" : "danger"}
+          value={cashTotal}
+          width={getBarWidth(cashTotal, paymentMax)}
+        />
+        <BreakdownBar
+          label={translate(language, "kpay")}
+          tone={kpayTotal >= 0 ? "success" : "danger"}
+          value={kpayTotal}
+          width={getBarWidth(kpayTotal, paymentMax)}
+        />
+      </BreakdownPanel>
+    </section>
+  )
+}
+
+function BreakdownPanel({
+  children,
+  title
+}: {
+  children: React.ReactNode
+  title: string
+}) {
+  return (
+    <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
+      <h2 className="mb-4 text-base font-semibold">{title}</h2>
+      <div className="space-y-4">{children}</div>
+    </section>
+  )
+}
+
+function BreakdownBar({
+  label,
+  tone,
+  value,
+  width
+}: {
+  label: string
+  tone: "danger" | "success"
+  value: number
+  width: number
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium">{label}</span>
+        <span className={tone === "success" ? "font-semibold text-[var(--success)]" : "font-semibold text-[var(--danger)]"}>
+          {formatCompactCurrency(value)}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+        <div className={`h-full rounded-full ${tone === "success" ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`} style={{ width: `${width}%` }} />
+      </div>
     </div>
   )
 }
@@ -277,8 +384,10 @@ function buildReport(
     personalTotal: sumNetAmount(personalExpenses),
     personalCount: personalExpenses.length,
     total,
+    cashTotal: sumNetAmountByPaymentMethod(businessExpenses, "cash"),
+    kpayTotal: sumNetAmountByPaymentMethod(businessExpenses, "kpay"),
     dailyAverage: dailyRows.length > 0 ? total / dailyRows.length : 0,
-    maxDailyTotal: Math.max(...dailyRows.map((row) => row.total), 0),
+    maxDailyTotal: Math.max(...dailyRows.map((row) => Math.abs(row.total)), 0),
     topExpenses: filteredExpenses
       .slice()
       .sort((left, right) => right.amount - left.amount)
@@ -333,13 +442,14 @@ function buildDailyRows(expenses: ReadonlyArray<Expense>): DailyReportRow[] {
 
 function exportReportCsv(expenses: ReadonlyArray<Expense>) {
   const rows = [
-    ["Date", "Note", "Amount Ks", "Kind", "Type"],
+    ["Date", "Note", "Amount Ks", "Kind", "Type", "Payment Method"],
     ...expenses.map((expense) => [
       expense.date,
       expense.note,
       String(expense.amount),
       expense.kind,
-      expense.type
+      expense.type,
+      expense.type === "business" ? getBusinessPaymentMethod(expense) : ""
     ])
   ]
   const csv = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")
@@ -370,7 +480,11 @@ function getBarWidth(value: number, maxValue: number): number {
     return 0
   }
 
-  return Math.max(8, Math.round((value / maxValue) * 100))
+  return Math.max(8, Math.round((Math.abs(value) / maxValue) * 100))
+}
+
+function getBarToneClassName(value: number): string {
+  return value >= 0 ? "bg-[var(--business)]" : "bg-[var(--danger)]"
 }
 
 function getTypeClassName(type: Expense["type"]): string {

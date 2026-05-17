@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { insertExpense, listVisibleExpenses } from "@/lib/server/expense-repository"
 import { requireCurrentUser } from "@/lib/server/api"
 import { validateTrustedOrigin } from "@/lib/server/security"
-import type { ExpenseType, TransactionKind } from "@/lib/types"
+import type { ExpenseType, PaymentMethod, TransactionKind } from "@/lib/types"
 
 export async function GET() {
   const auth = await requireCurrentUser()
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   const amount = readAmount(body)
   const type = readExpenseType(body)
   const kind = readTransactionKind(body, type)
+  const paymentMethod = readPaymentMethod(body, type)
   const date = readDate(body)
   const note = readNote(body)
 
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
   const expense = await insertExpense({
     type,
     kind,
+    paymentMethod,
     amount,
     paidByUserId: auth.user.id,
     ownerUserId: auth.user.id,
@@ -71,6 +73,14 @@ function readExpenseType(value: unknown): ExpenseType {
 
 function readTransactionKind(value: unknown, _type: ExpenseType): TransactionKind {
   return readString(value, "kind") === "income" ? "income" : "expense"
+}
+
+function readPaymentMethod(value: unknown, type: ExpenseType): PaymentMethod | undefined {
+  if (type !== "business") {
+    return undefined
+  }
+
+  return readString(value, "paymentMethod") === "kpay" ? "kpay" : "cash"
 }
 
 function readDate(value: unknown): string {

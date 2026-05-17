@@ -14,7 +14,8 @@ import {
   getVisibleExpenses,
   sumExpenseOutflow,
   sumIncome,
-  sumNetAmount
+  sumNetAmount,
+  sumNetAmountByPaymentMethod
 } from "@/lib/expenses"
 import {
   languageStorageKey,
@@ -40,12 +41,14 @@ const userCacheKey = "splitledger_current_user"
 export function AppShell() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [activeView, setActiveView] = useState<View>("home")
+  const [openEntryType, setOpenEntryType] = useState<Expense["type"] | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [language, setLanguage] = useState<Language>("en")
   const [error, setError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [isBooting, setIsBooting] = useState(true)
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const lastAutoRefreshAt = useRef(0)
   const currentUserId = currentUser?.id ?? ""
   const visibleExpenses = useMemo(
@@ -121,9 +124,28 @@ export function AppShell() {
     }
   }, [currentUserId])
 
+  useEffect(() => {
+    if (!notice) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => setNotice(null), 4000)
+    return () => window.clearTimeout(timeoutId)
+  }, [notice])
+
   function handleLanguageChange(nextLanguage: Language) {
     setLanguage(nextLanguage)
     window.localStorage.setItem(languageStorageKey, nextLanguage)
+  }
+
+  function handleChangeView(view: View) {
+    setOpenEntryType(null)
+    setActiveView(view)
+  }
+
+  function handleStartEntry(type: Expense["type"]) {
+    setOpenEntryType(type)
+    setActiveView(type)
   }
 
   async function loadCurrentUser() {
@@ -249,6 +271,7 @@ export function AppShell() {
       body: JSON.stringify({
         type: input.type,
         kind: input.kind,
+        paymentMethod: input.paymentMethod,
         amount: input.amount,
         date: input.date,
         note: input.note
@@ -262,6 +285,8 @@ export function AppShell() {
 
     const expense = result.expense
     setExpenses((currentExpenses) => [expense, ...currentExpenses])
+    setOpenEntryType(null)
+    setNotice(translate(language, "transactionSaved"))
     setActiveView(input.type === "business" ? "business" : "personal")
   }
 
@@ -284,6 +309,7 @@ export function AppShell() {
     setExpenses((currentExpenses) =>
       currentExpenses.filter((expense) => expense.id !== expenseId)
     )
+    setNotice(translate(language, "deletedTransaction"))
   }
 
   async function handleLogout() {
@@ -307,7 +333,7 @@ export function AppShell() {
         <div className="mb-8">
           <Logo />
         </div>
-        <Navigation activeView={activeView} language={language} onChange={setActiveView} />
+        <Navigation activeView={activeView} language={language} onChange={handleChangeView} />
       </aside>
 
       <section className="pb-24 lg:pb-0">
@@ -354,6 +380,11 @@ export function AppShell() {
                 {error}
               </div>
             ) : null}
+            {notice ? (
+              <div className="rounded-md bg-[var(--success-soft)] px-3 py-2 text-sm font-medium text-[var(--success)]">
+                {notice}
+              </div>
+            ) : null}
             {!isOnline ? (
               <div className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm font-medium text-[var(--muted)]">
                 {translate(language, "offlineReadOnly")}
@@ -372,9 +403,11 @@ export function AppShell() {
                 visibleExpenses,
                 currentUserId,
                 totals,
-                onChangeView: setActiveView,
+                openEntryType,
+                onChangeView: handleChangeView,
                 onAddExpense: handleAddExpense,
-                onDeleteExpense: handleDeleteExpense
+                onDeleteExpense: handleDeleteExpense,
+                onStartEntry: handleStartEntry
               })
             )}
           </Stack>
@@ -391,7 +424,7 @@ export function AppShell() {
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[var(--surface)] p-2 lg:hidden">
-        <Navigation activeView={activeView} language={language} mobile onChange={setActiveView} />
+        <Navigation activeView={activeView} language={language} mobile onChange={handleChangeView} />
       </nav>
     </main>
   )
@@ -405,9 +438,11 @@ interface RenderViewArgs {
   currentUserId: string
   language: Language
   totals: ReturnType<typeof calculateDashboardTotals>
+  openEntryType: Expense["type"] | null
   onChangeView: (view: View) => void
   onAddExpense: (input: ExpenseInput) => Promise<void>
   onDeleteExpense: (expenseId: string) => Promise<void>
+  onStartEntry: (type: Expense["type"]) => void
 }
 
 function renderView({
@@ -418,20 +453,32 @@ function renderView({
   currentUserId,
   language,
   totals,
+  openEntryType,
   onChangeView,
   onAddExpense,
-  onDeleteExpense
+  onDeleteExpense,
+  onStartEntry
 }: RenderViewArgs) {
   if (activeView === "business") {
     const businessExpenses = expenses.filter((expense) => expense.type === "business")
     return (
       <Stack>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
             detail={translate(language, "businessNet")}
             label={translate(language, "allTotal")}
             tone="business"
             value={formatCurrency(sumNetAmount(businessExpenses))}
+          />
+          <SummaryCard
+            detail={translate(language, "cash")}
+            label={translate(language, "cashBalance")}
+            value={formatCurrency(sumNetAmountByPaymentMethod(businessExpenses, "cash"))}
+          />
+          <SummaryCard
+            detail={translate(language, "kpay")}
+            label={translate(language, "kpayBalance")}
+            value={formatCurrency(sumNetAmountByPaymentMethod(businessExpenses, "kpay"))}
           />
           <SummaryCard
             detail={translate(language, "incomingCash")}
@@ -448,6 +495,7 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="business"
+          defaultOpen={openEntryType === "business"}
           isOnline={isOnline}
           language={language}
           onAddExpense={onAddExpense}
@@ -489,6 +537,7 @@ function renderView({
         <TransactionEntry
           currentUserId={currentUserId}
           fixedType="personal"
+          defaultOpen={openEntryType === "personal"}
           isOnline={isOnline}
           language={language}
           onAddExpense={onAddExpense}
@@ -525,6 +574,7 @@ function renderView({
   return (
     <HomeView
       onChangeView={onChangeView}
+      onStartEntry={onStartEntry}
       language={language}
       isOnline={isOnline}
       onDeleteExpense={onDeleteExpense}
@@ -536,6 +586,7 @@ function renderView({
 
 function HomeView({
   onChangeView,
+  onStartEntry,
   isOnline,
   language,
   onDeleteExpense,
@@ -543,6 +594,7 @@ function HomeView({
   visibleExpenses
 }: {
   onChangeView: (view: View) => void
+  onStartEntry: (type: Expense["type"]) => void
   isOnline: boolean
   language: Language
   onDeleteExpense: (expenseId: string) => Promise<void>
@@ -550,43 +602,22 @@ function HomeView({
   visibleExpenses: ReadonlyArray<Expense>
 }) {
   const monthTransactions = getCurrentMonthTransactions(visibleExpenses)
+  const monthNet = sumNetAmount(monthTransactions)
+  const monthIncome = sumIncome(monthTransactions)
+  const monthOutflow = sumExpenseOutflow(monthTransactions)
 
   return (
     <Stack>
-      <section className="space-y-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">{translate(language, "thisMonth")}</h2>
-          </div>
-          <button
-            className="h-9 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-medium hover:bg-[var(--surface-muted)]"
-            onClick={() => onChangeView("reports")}
-            type="button"
-          >
-            {translate(language, "viewReports")}
-          </button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            detail={translate(language, "businessAndPersonal")}
-            label={translate(language, "monthNet")}
-            tone="business"
-            value={formatCompactCurrency(sumNetAmount(monthTransactions))}
-          />
-          <SummaryCard
-            detail={translate(language, "incomingCash")}
-            label={translate(language, "income")}
-            value={formatCompactCurrency(sumIncome(monthTransactions))}
-          />
-          <SummaryCard
-            detail={translate(language, "outgoingCash")}
-            label={translate(language, "expenses")}
-            tone="personal"
-            value={formatCompactCurrency(sumExpenseOutflow(monthTransactions))}
-          />
-          <SummaryCard label={translate(language, "today")} value={formatCompactCurrency(totals.today)} />
-        </div>
-      </section>
+      <DashboardHero
+        income={monthIncome}
+        language={language}
+        net={monthNet}
+        onAddBusiness={() => onStartEntry("business")}
+        onAddPersonal={() => onStartEntry("personal")}
+        onViewReports={() => onChangeView("reports")}
+        outflow={monthOutflow}
+        today={totals.today}
+      />
 
       <section className="grid gap-3 sm:grid-cols-2">
         <HomeAction
@@ -625,6 +656,103 @@ function HomeView({
         />
       </section>
     </Stack>
+  )
+}
+
+function DashboardHero({
+  income,
+  language,
+  net,
+  onAddBusiness,
+  onAddPersonal,
+  onViewReports,
+  outflow,
+  today
+}: {
+  income: number
+  language: Language
+  net: number
+  onAddBusiness: () => void
+  onAddPersonal: () => void
+  onViewReports: () => void
+  outflow: number
+  today: number
+}) {
+  return (
+    <section className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
+        <div>
+          <div className="text-xs font-semibold uppercase text-[var(--muted)]">
+            {translate(language, "monthSnapshot")}
+          </div>
+          <div className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
+            {formatCompactCurrency(net)}
+          </div>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            {translate(language, "netPosition")} - {translate(language, "businessAndPersonal")}
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <MiniMetric
+              label={translate(language, "income")}
+              tone="success"
+              value={formatCompactCurrency(income)}
+            />
+            <MiniMetric
+              label={translate(language, "expenses")}
+              tone="danger"
+              value={formatCompactCurrency(outflow)}
+            />
+            <MiniMetric
+              label={translate(language, "todayMovement")}
+              tone={today >= 0 ? "success" : "danger"}
+              value={formatCompactCurrency(today)}
+            />
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <button
+            className="h-10 rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+            onClick={onAddBusiness}
+            type="button"
+          >
+            {translate(language, "addBusiness")}
+          </button>
+          <button
+            className="h-10 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 text-sm font-semibold hover:bg-[var(--surface-muted)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+            onClick={onAddPersonal}
+            type="button"
+          >
+            {translate(language, "addPersonal")}
+          </button>
+          <button
+            className="h-10 rounded-md border border-[var(--line)] bg-[var(--surface)] px-4 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+            onClick={onViewReports}
+            type="button"
+          >
+            {translate(language, "viewReports")}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MiniMetric({
+  label,
+  tone,
+  value
+}: {
+  label: string
+  tone: "danger" | "success"
+  value: string
+}) {
+  const toneClassName = tone === "success" ? "text-[var(--success)]" : "text-[var(--danger)]"
+
+  return (
+    <div className="rounded-md bg-[var(--surface-muted)] p-3">
+      <div className="text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
+      <div className={`mt-1 text-base font-semibold ${toneClassName}`}>{value}</div>
+    </div>
   )
 }
 
@@ -819,18 +947,20 @@ function getCurrentMonthTransactions(expenses: ReadonlyArray<Expense>): Expense[
 
 function TransactionEntry({
   currentUserId,
+  defaultOpen = false,
   fixedType,
   isOnline,
   language,
   onAddExpense
 }: {
   currentUserId: string
+  defaultOpen?: boolean
   fixedType: "business" | "personal"
   isOnline: boolean
   language: Language
   onAddExpense: (input: ExpenseInput) => Promise<void>
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(defaultOpen)
   const label = fixedType === "business" ? translate(language, "business") : translate(language, "personal")
 
   async function handleAddExpense(input: ExpenseInput) {
@@ -862,7 +992,9 @@ function TransactionEntry({
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-4">
       <div>
-        <h2 className="text-base font-semibold">{label} transactions</h2>
+        <h2 className="text-base font-semibold">
+          {label} {translate(language, "transactions")}
+        </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {translate(language, "addIncomeOrExpense")}
         </p>
@@ -904,7 +1036,7 @@ function Navigation({ activeView, language, mobile = false, onChange }: Navigati
             {mobile ? (
               <>
                 <NavigationIcon view={item.id} />
-                <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--text)] px-2 py-1 text-xs font-medium text-[var(--surface)] shadow-sm group-hover:block group-focus-visible:block">
+                <span className="mt-1 max-w-full truncate text-[0.625rem] font-semibold leading-none">
                   {label}
                 </span>
               </>
@@ -1064,7 +1196,7 @@ function getNavigationClassName(isActive: boolean, mobile: boolean): string {
   const base =
     "rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
   const size = mobile
-    ? "group relative grid min-h-12 place-items-center"
+    ? "grid min-h-14 place-items-center overflow-hidden"
     : "w-full text-left"
   const state = isActive
     ? "bg-[var(--text)] text-[var(--surface)]"

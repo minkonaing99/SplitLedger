@@ -1,4 +1,4 @@
-import type { DashboardTotals, Expense, ExpenseInput } from "./types"
+import type { DashboardTotals, Expense, ExpenseInput, PaymentMethod } from "./types"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
@@ -110,6 +110,23 @@ export function sumNetAmount(expenses: ReadonlyArray<Expense>): number {
   return expenses.reduce(
     (total, expense) => total + (expense.kind === "income" ? expense.amount : -expense.amount),
     0
+  )
+}
+
+export function getBusinessPaymentMethod(expense: Expense): PaymentMethod {
+  return expense.type === "business" ? expense.paymentMethod ?? "cash" : "cash"
+}
+
+export function sumNetAmountByPaymentMethod(
+  expenses: ReadonlyArray<Expense>,
+  paymentMethod: PaymentMethod
+): number {
+  return sumNetAmount(
+    expenses.filter(
+      (expense) =>
+        expense.type === "business" &&
+        getBusinessPaymentMethod(expense) === paymentMethod
+    )
   )
 }
 

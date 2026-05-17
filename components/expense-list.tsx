@@ -1,4 +1,12 @@
-import { formatCurrency, formatDisplayDate, sumNetAmount } from "@/lib/expenses"
+"use client"
+
+import { useState } from "react"
+import {
+  formatCurrency,
+  formatDisplayDate,
+  getBusinessPaymentMethod,
+  sumNetAmount
+} from "@/lib/expenses"
 import { translate, type Language } from "@/lib/i18n"
 import type { Expense } from "@/lib/types"
 
@@ -88,6 +96,13 @@ function ExpenseRow({
   onDeleteExpense?: (expenseId: string) => void
   showSigns: boolean
 }) {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
+
+  function handleDelete() {
+    onDeleteExpense?.(expense.id)
+    setIsConfirmingDelete(false)
+  }
+
   return (
     <article className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-[var(--line)] p-3 last:border-b-0 sm:gap-3 sm:p-4">
       <div className="min-w-0">
@@ -101,6 +116,11 @@ function ExpenseRow({
           <span className={getKindClassName(expense.kind)}>
             {translate(language, expense.kind)}
           </span>
+          {expense.type === "business" ? (
+            <span className="rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">
+              {translate(language, getBusinessPaymentMethod(expense))}
+            </span>
+          ) : null}
         </div>
         {hideDate ? null : (
           <p className="mt-1 text-xs text-[var(--muted)]">{getExpenseMeta(expense)}</p>
@@ -111,12 +131,31 @@ function ExpenseRow({
           {showSigns ? getAmountSign(expense) : ""}
           {formatCurrency(expense.amount)}
         </div>
-        {onDeleteExpense ? (
+        {onDeleteExpense && isConfirmingDelete ? (
+          <div className="flex items-center gap-1">
+            <button
+              className="h-8 rounded-md bg-[var(--danger)] px-2 text-xs font-semibold text-[var(--surface)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!isOnline}
+              onClick={handleDelete}
+              type="button"
+            >
+              {translate(language, "delete")}
+            </button>
+            <button
+              className="h-8 rounded-md border border-[var(--line)] px-2 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+              onClick={() => setIsConfirmingDelete(false)}
+              type="button"
+            >
+              {translate(language, "cancel")}
+            </button>
+          </div>
+        ) : onDeleteExpense ? (
           <button
             aria-label={`Delete ${expense.note}`}
             className="grid size-7 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--muted)] sm:size-8"
             disabled={!isOnline}
-            onClick={() => handleDeleteClick(expense, language, onDeleteExpense)}
+            onClick={() => setIsConfirmingDelete(true)}
+            title={translate(language, "confirmDelete")}
             type="button"
           >
             <TrashIcon />
@@ -125,18 +164,6 @@ function ExpenseRow({
       </div>
     </article>
   )
-}
-
-function handleDeleteClick(
-  expense: Expense,
-  language: Language,
-  onDeleteExpense: (expenseId: string) => void
-) {
-  const shouldDelete = window.confirm(`${translate(language, "deleteConfirmPrefix")} "${expense.note}"?`)
-
-  if (shouldDelete) {
-    onDeleteExpense(expense.id)
-  }
 }
 
 function TrashIcon() {

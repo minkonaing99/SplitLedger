@@ -1,8 +1,8 @@
-# SplitLedger v2.0 EC2 Deployment Guide
+# SplitLedger v4.0 EC2 Deployment Guide
 
-This guide deploys SplitLedger v2.0 on an Amazon EC2 Ubuntu server with:
+This guide deploys SplitLedger v4.0 on an Amazon EC2 Ubuntu server with:
 
-- Next.js production server on `127.0.0.1:3000`
+- Next.js production server on `127.0.0.1:3001`
 - MongoDB in Docker Compose, bound to `127.0.0.1:27017`
 - Nginx reverse proxy on ports `80` and `443`
 - HTTPS with Certbot
@@ -31,7 +31,7 @@ Recommended starting point:
   - SSH `22` from your own IP only
   - HTTP `80` from `0.0.0.0/0`
   - HTTPS `443` from `0.0.0.0/0`
-- Do not open `3000`
+- Do not open `3001`
 - Do not open `27017`
 
 Point your DNS record to the EC2 public IPv4 address:
@@ -117,13 +117,13 @@ docker compose version
 docker ps
 ```
 
-## 6. Clone The v2.0 Branch
+## 6. Clone The v4.0 Branch
 
 ```bash
 sudo mkdir -p /var/www
 sudo chown ubuntu:ubuntu /var/www
 cd /var/www
-git clone -b v2.0 YOUR_GITHUB_REPO splitledger
+git clone -b v4.0 YOUR_GITHUB_REPO splitledger
 cd /var/www/splitledger
 ```
 
@@ -214,18 +214,18 @@ Expected:
 
 The seed route is disabled in production, so seed once before running `next start` with `NODE_ENV=production`.
 
-Run a temporary dev server bound to localhost:
+Run a temporary dev server bound to localhost on port `3001`:
 
 ```bash
 cd /var/www/splitledger
-npm run dev -- --hostname 127.0.0.1
+npm run dev -- --hostname 127.0.0.1 --port 3001
 ```
 
 Open a second SSH session and run:
 
 ```bash
-curl -X POST http://127.0.0.1:3000/api/dev/seed \
-  -H "Origin: http://127.0.0.1:3000"
+curl -X POST http://127.0.0.1:3001/api/dev/seed \
+  -H "Origin: http://127.0.0.1:3001"
 ```
 
 Expected response:
@@ -277,7 +277,7 @@ User=ubuntu
 WorkingDirectory=/var/www/splitledger
 EnvironmentFile=/etc/splitledger/splitledger.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port 3000
+ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port 3001
 Restart=always
 RestartSec=5
 
@@ -309,8 +309,8 @@ journalctl -u splitledger -f
 Verify localhost app response:
 
 ```bash
-curl -I http://127.0.0.1:3000
-curl http://127.0.0.1:3000/api/health/db
+curl -I http://127.0.0.1:3001
+curl http://127.0.0.1:3001/api/health/db
 ```
 
 ## 12. Configure Nginx
@@ -331,7 +331,7 @@ server {
     client_max_body_size 5m;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -485,15 +485,80 @@ Restart the app after restore:
 sudo systemctl restart splitledger
 ```
 
-## 18. Update To A New Release
+## 18. Upgrade From v3.0 To v4.0 Without Deleting MongoDB
 
-For a later release branch:
+Use this path when an EC2 server already has a v3.0 deployment and real data in the Docker MongoDB volume.
+
+Important rules:
+
+- Do not run `docker compose down -v`.
+- Do not delete the `splitledger_mongo_data` Docker volume.
+- Do not run `mongorestore --drop` unless you intentionally want to replace the database from a backup.
+- Running `docker compose up -d mongo` is safe; it preserves the existing volume.
+
+Create a backup before changing code:
 
 ```bash
 cd /var/www/splitledger
+sudo mkdir -p /var/backups/splitledger
+sudo chown ubuntu:ubuntu /var/backups/splitledger
+chmod 700 /var/backups/splitledger
+source /etc/splitledger/splitledger.env
+docker compose --env-file /etc/splitledger/splitledger.env exec mongo \
+  mongodump \
+  --archive=/tmp/splitledger-pre-v4.archive \
+  --gzip \
+  --db "$MONGODB_DB" \
+  --username "$MONGO_ROOT_USERNAME" \
+  --password "$MONGO_ROOT_PASSWORD" \
+  --authenticationDatabase admin
+
+docker compose --env-file /etc/splitledger/splitledger.env cp \
+  mongo:/tmp/splitledger-pre-v4.archive \
+  /var/backups/splitledger/splitledger-pre-v4-$(date +%Y%m%d-%H%M%S).archive
+```
+
+Stop only the app while upgrading. Keep MongoDB running:
+
+```bash
+cd /var/www/splitledger
+sudo systemctl stop splitledger
 git fetch origin
-git switch v2.0
-git pull --ff-only origin v2.0
+git switch v4.0
+git pull --ff-only origin v4.0
+npm install
+npm run typecheck
+npm test
+npm run build
+docker compose --env-file /etc/splitledger/splitledger.env up -d mongo
+```
+
+Run the v4.0 data backfill. This preserves existing records and only fills missing `paymentMethod` on existing business expenses with `cash`:
+
+```bash
+npm run db:backfill-payment-method
+```
+
+Start the app again:
+
+```bash
+sudo systemctl restart splitledger
+sudo systemctl status splitledger
+curl http://127.0.0.1:3001/api/health/db
+```
+
+After signing in, confirm older business entries still appear and Cash/KPay balances look correct.
+
+## 19. Update To A Later Release
+
+For a later release branch, follow the same backup-first pattern:
+
+```bash
+cd /var/www/splitledger
+sudo systemctl stop splitledger
+git fetch origin
+git switch RELEASE_BRANCH
+git pull --ff-only origin RELEASE_BRANCH
 npm install
 npm run typecheck
 npm test
@@ -503,7 +568,9 @@ sudo systemctl restart splitledger
 sudo systemctl status splitledger
 ```
 
-## 19. Useful Commands
+If the later release includes a migration or backfill script, run it after `npm run build` and before restarting the app.
+
+## 20. Useful Commands
 
 App logs:
 
@@ -544,10 +611,10 @@ Expected public listeners:
 
 Expected private listeners:
 
-- `127.0.0.1:3000`
+- `127.0.0.1:3001`
 - `127.0.0.1:27017`
 
-## 20. Production Rules
+## 21. Production Rules
 
 - Never commit `.env`, `.env.local`, or real passwords.
 - Never expose MongoDB port `27017` publicly.
