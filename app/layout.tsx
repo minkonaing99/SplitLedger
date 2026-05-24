@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import { headers } from "next/headers"
 import { PwaRegister } from "@/components/pwa-register"
 import "./globals.css"
 
@@ -23,9 +24,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   initialScale: 1,
-  maximumScale: 1,
   themeColor: "#1F2937",
-  userScalable: false,
   viewportFit: "cover",
   width: "device-width"
 }
@@ -34,12 +33,15 @@ interface RootLayoutProps {
   children: React.ReactNode
 }
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({ children }: RootLayoutProps) {
+  // Reading x-nonce causes Next.js to propagate it to its own hydration scripts.
+  const nonce = (await headers()).get("x-nonce") ?? ""
+
   return (
     <html lang="en">
       <body>
         {children}
-        <PwaRegister />
+        <PwaRegister nonce={nonce} />
       </body>
     </html>
   )

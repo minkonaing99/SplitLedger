@@ -240,7 +240,14 @@ function DailyTrend({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[var(--line)] py-10 text-sm text-[var(--muted)]">
+        <svg aria-hidden="true" className="size-8 opacity-40" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+          <path d="M4 19V5" />
+          <path d="M4 19h16" />
+          <path d="M8 16v-5" />
+          <path d="M12 16V8" />
+          <path d="M16 16v-3" />
+        </svg>
         {translate(language, "noReportData")}
       </div>
     )
@@ -250,7 +257,7 @@ function DailyTrend({
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-[var(--line)] text-left text-xs font-semibold uppercase text-[var(--muted)]">
+          <tr className="border-b-2 border-[var(--line)] text-left text-xs font-semibold uppercase text-[var(--muted)]">
             <th className="py-2 pr-3">{translate(language, "date")}</th>
             <th className="px-3 py-2 text-right">{translate(language, "income")}</th>
             <th className="px-3 py-2 text-right">{translate(language, "expenses")}</th>
@@ -273,7 +280,7 @@ function DailyTrend({
               <td className="px-3 py-3">{row.count}</td>
               <td className="py-3 pl-3 text-right">
                 <div className="flex min-w-40 items-center justify-end gap-3">
-                  <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+                  <div className="h-2.5 w-24 overflow-hidden rounded-full bg-[var(--surface-muted)]">
                     <div
                       className={`h-full rounded-full ${getBarToneClassName(row.total)}`}
                       style={{ width: `${getBarWidth(row.total, maxTotal)}%` }}
@@ -301,7 +308,14 @@ function TopExpenses({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[var(--line)] py-10 text-sm text-[var(--muted)]">
+        <svg aria-hidden="true" className="size-8 opacity-40" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+          <path d="M3 6h18" />
+          <path d="M8 6V4h8v2" />
+          <path d="M19 6l-1 14H6L5 6" />
+          <path d="M10 11v5" />
+          <path d="M14 11v5" />
+        </svg>
         {translate(language, "noTransactionsToRank")}
       </div>
     )
@@ -454,7 +468,13 @@ function MonthlyClosePanel({
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[var(--line)] py-8 text-sm text-[var(--muted)]">
+          <svg aria-hidden="true" className="size-7 opacity-40" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+            <rect height="18" rx="2" width="18" x="3" y="4" />
+            <path d="M16 2v4" />
+            <path d="M8 2v4" />
+            <path d="M3 10h18" />
+          </svg>
           {translate(language, "noMonthlyClose")}
         </div>
       )}
@@ -490,7 +510,7 @@ function CloseBalanceGroup({
 
 function MiniCloseMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-[var(--line)] p-3">
+    <div className="rounded-md bg-[var(--surface-muted)] p-3">
       <div className="text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
       <div className="mt-1 text-base font-semibold">{formatCompactCurrency(value)}</div>
     </div>
@@ -533,7 +553,7 @@ function BreakdownBar({
           {formatCompactCurrency(value)}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+      <div className="h-2.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
         <div className={`h-full rounded-full ${toneClassName.bar}`} style={{ width: `${width}%` }} />
       </div>
     </div>

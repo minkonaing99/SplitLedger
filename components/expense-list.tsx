@@ -30,7 +30,13 @@ export function ExpenseList({
 }: ExpenseListProps) {
   if (expenses.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface)] p-6 text-sm text-[var(--muted)]">
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface)] py-10 text-sm text-[var(--muted)]">
+        <svg aria-hidden="true" className="size-8 opacity-40" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+          <rect height="4" rx="1" width="6" x="9" y="3" />
+          <path d="M9 12h6" />
+          <path d="M9 16h4" />
+        </svg>
         {translate(language, "noTransactions")}
       </div>
     )
@@ -238,7 +244,7 @@ function getAmountClassName(expense: Expense): string {
       : expense.kind === "transfer"
         ? "text-[var(--muted)]"
         : "text-[var(--text)]"
-  return `min-w-20 text-right text-sm font-semibold leading-none sm:min-w-24 ${color}`
+  return `min-w-20 text-right text-base font-semibold leading-none sm:min-w-24 ${color}`
 }
 
 function getAmountSign(expense: Expense): string {
