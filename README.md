@@ -5,37 +5,29 @@ SplitLedger is a private finance web app for shared business records and private
 ## Features
 
 - Next.js 15 app router with Tailwind CSS.
-- MongoDB-backed users, sessions, login attempts, expenses, and audit logs.
+- MySQL-backed users, sessions, login attempts, expenses, and audit logs.
 - Server-side authentication with opaque `httpOnly` session cookies.
 - Shared business ledger plus private personal ledgers.
 - Income and expense tracking with monthly filters, daily grouping, subtotals, reports, and CSV export.
 - English and Burmese language toggle with saved language preference.
 - Myanmar currency display using `Ks`.
 - PWA manifest and production service worker.
-- Docker Compose MongoDB setup for local development.
 
 ## Requirements
 
 - Node.js 22 or newer.
 - npm.
-- Docker Desktop or Docker Engine with Compose.
-- MongoDB via the included Docker Compose service or a private MongoDB deployment.
+- MySQL 8 or newer running locally or on a private server.
 
 ## Local Setup
 
-Create local environment variables:
+Copy the environment template and fill in your values:
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
-Edit `.env.local` and replace all `replace-with-*` values with strong local secrets.
-
-Start MongoDB:
-
-```bash
-npm run db:up
-```
+Edit `.env` with your MySQL credentials and seed users.
 
 Install dependencies:
 
@@ -49,6 +41,8 @@ Start the web app:
 npm run dev
 ```
 
+Database tables are created automatically on the first request.
+
 Open:
 
 ```text
@@ -57,9 +51,9 @@ http://localhost:3000
 
 ## Seed Users
 
-Login credentials are not stored in source code. Seed users are read from `SPLITLEDGER_SEED_USERS` in `.env.local`.
+Login credentials are not stored in source code. Seed users are configured in `SPLITLEDGER_SEED_USERS` inside `.env`.
 
-With MongoDB and the dev server running:
+With the dev server running:
 
 ```bash
 curl -X POST http://localhost:3000/api/dev/seed
@@ -75,9 +69,6 @@ npm run typecheck
 npm test
 npm run build
 npm start
-npm run db:up
-npm run db:down
-npm run db:logs
 ```
 
 ## Production Checks
@@ -94,11 +85,14 @@ Production environment must set:
 
 ```bash
 APP_ORIGIN=https://your-domain.example
-MONGODB_DB=splitledger
-MONGODB_URI=mongodb://splitledger_app:<strong-password>@<private-mongo-host>:27017/splitledger?authSource=splitledger
+MYSQL_HOST=<private-mysql-host>
+MYSQL_PORT=3306
+MYSQL_USER=<app-user>
+MYSQL_PASSWORD=<strong-password>
+MYSQL_DB=splitledger
 ```
 
-Do not expose MongoDB publicly. Keep it on a private network and use a least-privilege app database user.
+Use a least-privilege MySQL user scoped to the `splitledger` database. Do not expose MySQL publicly.
 
 ## Security Notes
 
@@ -107,7 +101,7 @@ Do not expose MongoDB publicly. Keep it on a private network and use a least-pri
 - Session cookies are `httpOnly`, `SameSite=Lax`, and `Secure` in production.
 - State-changing routes validate request origin.
 - Security headers are applied through `middleware.ts`.
-- Expense create and delete actions write to `expenseAudits`.
+- Expense create and delete actions write to `expense_audits`.
 - Business records are shared by design. Personal records are owner-scoped.
 
 ## PWA
@@ -123,8 +117,10 @@ npm start
 
 Then open `http://localhost:3000` and use the browser install option.
 
-## MongoDB Docs
+## Backup
 
-See `MONGODB.md` for local MongoDB setup, connection checks, backups, and restore commands.
+```bash
+mysqldump -u root -p splitledger > backups/splitledger_$(date +%Y%m%d).sql
+```
 
 See `PRODUCTION.md` for the production deployment checklist.

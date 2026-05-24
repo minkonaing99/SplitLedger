@@ -6,7 +6,7 @@ Migrated SplitLedger from MongoDB to MySQL (`mysql2`).
 
 - Host: `127.0.0.1`, Port: `3306`
 - Database: `splitledger` (pre-created)
-- User / Password: set in `.env.local` via `MYSQL_USER` / `MYSQL_PASSWORD`
+- User / Password: set in `.env` via `MYSQL_USER` / `MYSQL_PASSWORD`
 
 ## Why MySQL
 

@@ -134,9 +134,9 @@ Fields:
 
 ## Tech Stack
 
-- Next.js
-- Supabase (auth + database)
-- Tailwind CSS
+- Next.js 15 App Router
+- MySQL + `mysql2` (no ORM)
+- Tailwind CSS 4
 - PWA support
 
 ---

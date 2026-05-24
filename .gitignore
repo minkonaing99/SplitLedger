@@ -39,6 +39,9 @@ backups/
 # hosting and tooling
 .vercel/
 
+# Claude Code
+CLAUDE.md
+
 # OS and editor files
 .DS_Store
 Thumbs.db

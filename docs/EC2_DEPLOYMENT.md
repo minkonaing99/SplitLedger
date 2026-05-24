@@ -1,13 +1,13 @@
-# SplitLedger v4.1 EC2 Deployment Guide
+# SplitLedger v5.1 EC2 Deployment Guide
 
-This guide deploys SplitLedger v4.1 on an Amazon EC2 Ubuntu server with:
+This guide deploys SplitLedger v5.1 on an Amazon EC2 Ubuntu server with:
 
 - Next.js production server on `127.0.0.1:3001`
-- MongoDB in Docker Compose, bound to `127.0.0.1:27017`
+- MySQL bound to `127.0.0.1:3306`
 - Nginx reverse proxy on ports `80` and `443`
 - HTTPS with Certbot
 - systemd service for automatic app restart
-- MongoDB backup and restore commands
+- MySQL backup and restore commands
 
 Replace these placeholders before running commands:
 
@@ -15,8 +15,7 @@ Replace these placeholders before running commands:
 YOUR_DOMAIN              your real domain, for example ledger.example.com
 YOUR_EMAIL               email for Let's Encrypt notices
 YOUR_GITHUB_REPO         ssh://git@github.com/minkonaing99/SplitLedger.git
-STRONG_ROOT_DB_PASSWORD  strong Mongo root password
-STRONG_APP_DB_PASSWORD   strong Mongo app password
+STRONG_DB_PASSWORD       strong MySQL app user password
 STRONG_USER_PASSWORD_*   strong login passwords
 ```
 
@@ -32,7 +31,7 @@ Recommended starting point:
   - HTTP `80` from `0.0.0.0/0`
   - HTTPS `443` from `0.0.0.0/0`
 - Do not open `3001`
-- Do not open `27017`
+- Do not open `3306`
 
 Point your DNS record to the EC2 public IPv4 address:
 
@@ -87,43 +86,55 @@ node --version
 npm --version
 ```
 
-## 5. Install Docker And Compose
+## 5. Install MySQL
 
 ```bash
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker ubuntu
+sudo apt install -y mysql-server
+sudo systemctl enable mysql
+sudo systemctl start mysql
 ```
 
-Log out and SSH back in so the `docker` group is active:
+Secure the installation:
 
 ```bash
-exit
-ssh -i /path/to/key.pem ubuntu@EC2_PUBLIC_IP
+sudo mysql_secure_installation
 ```
 
-Verify Docker:
+Create the database and app user:
 
 ```bash
-docker --version
-docker compose version
-docker ps
+sudo mysql -u root
 ```
 
-## 6. Clone The v4.1 Branch
+Inside the MySQL prompt:
+
+```sql
+CREATE DATABASE IF NOT EXISTS splitledger CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'splitledger_app'@'localhost' IDENTIFIED BY 'STRONG_DB_PASSWORD';
+GRANT ALL PRIVILEGES ON splitledger.* TO 'splitledger_app'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Verify MySQL is bound to localhost only:
+
+```bash
+ss -lntp | grep 3306
+```
+
+Expected:
+
+```text
+127.0.0.1:3306
+```
+
+## 6. Clone The v5.1 Branch
 
 ```bash
 sudo mkdir -p /var/www
 sudo chown ubuntu:ubuntu /var/www
 cd /var/www
-git clone -b v4.1 YOUR_GITHUB_REPO splitledger
+git clone -b v5.1 YOUR_GITHUB_REPO splitledger
 cd /var/www/splitledger
 ```
 
@@ -153,14 +164,12 @@ Paste this and replace all secrets:
 
 ```bash
 APP_ORIGIN=https://YOUR_DOMAIN
-MONGODB_DB=splitledger
-MONGO_ROOT_USERNAME=root
-MONGO_ROOT_PASSWORD=STRONG_ROOT_DB_PASSWORD
-MONGO_APP_USERNAME=splitledger_app
-MONGO_APP_PASSWORD=STRONG_APP_DB_PASSWORD
-MONGO_PORT_BIND=127.0.0.1:27017
-MONGODB_URI=mongodb://splitledger_app:STRONG_APP_DB_PASSWORD@localhost:27017/splitledger?authSource=splitledger
-SPLITLEDGER_SEED_USERS=[{"id":"t_khant_naing","name":"T Khant Naing","email":"tkhantnaing@gmail.com","password":"STRONG_USER_PASSWORD_1"},{"id":"htet_myat_naing","name":"Htet Myat Naing","email":"htetmyatnaing@gmail.com","password":"STRONG_USER_PASSWORD_2"},{"id":"mg_mg","name":"Maung Maung","email":"maungmaung@gmail.com","password":"STRONG_USER_PASSWORD_3"}]
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=splitledger_app
+MYSQL_PASSWORD=STRONG_DB_PASSWORD
+MYSQL_DB=splitledger
+SPLITLEDGER_SEED_USERS=[{"id":"t_khant_naing","name":"T Khant Naing","email":"tkhantnaing@gmail.com","password":"STRONG_USER_PASSWORD_1"},{"id":"htet_myat_naing","name":"Htet Myat Naing","email":"htetmyatnaing@gmail.com","password":"STRONG_USER_PASSWORD_2"}]
 ```
 
 Lock down the file:
@@ -169,48 +178,13 @@ Lock down the file:
 sudo chmod 600 /etc/splitledger/splitledger.env
 ```
 
-Create local symlinks for Docker Compose and Next.js:
+Create a symlink for Next.js:
 
 ```bash
 ln -sf /etc/splitledger/splitledger.env /var/www/splitledger/.env
-ln -sf /etc/splitledger/splitledger.env /var/www/splitledger/.env.local
 ```
 
-Important:
-
-- `.env` is used by Docker Compose interpolation.
-- `.env.local` is loaded by Next.js.
-- These files are ignored by git.
-
-## 8. Start MongoDB
-
-From the project directory:
-
-```bash
-cd /var/www/splitledger
-docker compose --env-file /etc/splitledger/splitledger.env up -d mongo
-docker compose --env-file /etc/splitledger/splitledger.env ps
-```
-
-Check Mongo logs:
-
-```bash
-docker compose --env-file /etc/splitledger/splitledger.env logs mongo --tail=100
-```
-
-MongoDB must stay bound to localhost only:
-
-```bash
-ss -lntp | grep 27017
-```
-
-Expected:
-
-```text
-127.0.0.1:27017
-```
-
-## 9. Seed The First Users
+## 8. Seed The First Users
 
 The seed route is disabled in production, so seed once before running `next start` with `NODE_ENV=production`.
 
@@ -236,7 +210,7 @@ Expected response:
 
 Stop the dev server with `Ctrl+C`.
 
-After seeding, remove `SPLITLEDGER_SEED_USERS` from the runtime env file:
+After seeding, remove `SPLITLEDGER_SEED_USERS` from the env file:
 
 ```bash
 sudo nano /etc/splitledger/splitledger.env
@@ -244,7 +218,7 @@ sudo nano /etc/splitledger/splitledger.env
 
 Delete the `SPLITLEDGER_SEED_USERS=...` line, then save. This prevents production runtime from keeping login passwords in environment variables.
 
-## 10. Build The App
+## 9. Build The App
 
 ```bash
 cd /var/www/splitledger
@@ -255,7 +229,7 @@ npm run build
 
 All three commands must pass before continuing.
 
-## 11. Create systemd Service
+## 10. Create systemd Service
 
 Create a service file:
 
@@ -268,8 +242,8 @@ Paste:
 ```ini
 [Unit]
 Description=SplitLedger Next.js App
-After=network.target docker.service
-Requires=docker.service
+After=network.target mysql.service
+Requires=mysql.service
 
 [Service]
 Type=simple
@@ -313,7 +287,7 @@ curl -I http://127.0.0.1:3001
 curl http://127.0.0.1:3001/api/health/db
 ```
 
-## 12. Configure Nginx
+## 11. Configure Nginx
 
 Create Nginx site config:
 
@@ -360,7 +334,7 @@ Verify:
 curl -I http://YOUR_DOMAIN
 ```
 
-## 13. Enable HTTPS
+## 12. Enable HTTPS
 
 Install Certbot:
 
@@ -386,7 +360,7 @@ Verify HTTPS:
 curl -I https://YOUR_DOMAIN
 ```
 
-## 14. Final Production Verification
+## 13. Final Production Verification
 
 Run:
 
@@ -416,7 +390,7 @@ Test login in the browser:
 https://YOUR_DOMAIN
 ```
 
-## 15. PWA Install Check
+## 14. PWA Install Check
 
 In Chrome or Edge:
 
@@ -427,7 +401,7 @@ In Chrome or Edge:
 
 Service worker registration only runs in production builds.
 
-## 16. Backup MongoDB
+## 15. Backup MySQL
 
 Create backup directory:
 
@@ -440,43 +414,30 @@ chmod 700 /var/backups/splitledger
 Run backup:
 
 ```bash
-cd /var/www/splitledger
-source /etc/splitledger/splitledger.env
-docker compose --env-file /etc/splitledger/splitledger.env exec mongo \
-  mongodump \
-  --archive=/tmp/splitledger.archive \
-  --gzip \
-  --db "$MONGODB_DB" \
-  --username "$MONGO_ROOT_USERNAME" \
-  --password "$MONGO_ROOT_PASSWORD" \
-  --authenticationDatabase admin
+mysqldump -u splitledger_app -p splitledger \
+  > /var/backups/splitledger/splitledger-$(date +%Y%m%d-%H%M%S).sql
+```
 
-docker compose --env-file /etc/splitledger/splitledger.env cp \
-  mongo:/tmp/splitledger.archive \
-  /var/backups/splitledger/splitledger-$(date +%Y%m%d-%H%M%S).archive
+Automate with cron:
+
+```bash
+crontab -e
+```
+
+Add:
+
+```text
+0 2 * * * mysqldump -u splitledger_app -pSTRONG_DB_PASSWORD splitledger > /var/backups/splitledger/splitledger-$(date +\%Y\%m\%d).sql
 ```
 
 Copy backups off the EC2 instance regularly and encrypt them before long-term storage.
 
-## 17. Restore MongoDB
+## 16. Restore MySQL
 
-Upload the backup archive to EC2, then:
+Upload a backup SQL file to EC2, then:
 
 ```bash
-cd /var/www/splitledger
-source /etc/splitledger/splitledger.env
-docker compose --env-file /etc/splitledger/splitledger.env cp \
-  /var/backups/splitledger/splitledger.archive \
-  mongo:/tmp/splitledger.archive
-
-docker compose --env-file /etc/splitledger/splitledger.env exec mongo \
-  mongorestore \
-  --archive=/tmp/splitledger.archive \
-  --gzip \
-  --drop \
-  --username "$MONGO_ROOT_USERNAME" \
-  --password "$MONGO_ROOT_PASSWORD" \
-  --authenticationDatabase admin
+mysql -u splitledger_app -p splitledger < /var/backups/splitledger/splitledger.sql
 ```
 
 Restart the app after restore:
@@ -485,77 +446,16 @@ Restart the app after restore:
 sudo systemctl restart splitledger
 ```
 
-## 18. Upgrade From v3.0 To v4.1 Without Deleting MongoDB
-
-Use this path when an EC2 server already has a v3.0 deployment and real data in the Docker MongoDB volume.
-
-Important rules:
-
-- Do not run `docker compose down -v`.
-- Do not delete the `splitledger_mongo_data` Docker volume.
-- Do not run `mongorestore --drop` unless you intentionally want to replace the database from a backup.
-- Running `docker compose up -d mongo` is safe; it preserves the existing volume.
-
-Create a backup before changing code:
-
-```bash
-cd /var/www/splitledger
-sudo mkdir -p /var/backups/splitledger
-sudo chown ubuntu:ubuntu /var/backups/splitledger
-chmod 700 /var/backups/splitledger
-source /etc/splitledger/splitledger.env
-docker compose --env-file /etc/splitledger/splitledger.env exec mongo \
-  mongodump \
-  --archive=/tmp/splitledger-pre-v4.archive \
-  --gzip \
-  --db "$MONGODB_DB" \
-  --username "$MONGO_ROOT_USERNAME" \
-  --password "$MONGO_ROOT_PASSWORD" \
-  --authenticationDatabase admin
-
-docker compose --env-file /etc/splitledger/splitledger.env cp \
-  mongo:/tmp/splitledger-pre-v4.archive \
-  /var/backups/splitledger/splitledger-pre-v4-$(date +%Y%m%d-%H%M%S).archive
-```
-
-Stop only the app while upgrading. Keep MongoDB running:
+## 17. Upgrade To A Later Release
 
 ```bash
 cd /var/www/splitledger
 sudo systemctl stop splitledger
-git fetch origin
-git switch v4.1
-git pull --ff-only origin v4.1
-npm install
-npm run typecheck
-npm test
-npm run build
-docker compose --env-file /etc/splitledger/splitledger.env up -d mongo
-```
 
-Run the ledger data migration. This preserves existing records, updates the MongoDB validator for transfers, creates monthly-close indexes, and fills missing `paymentMethod` on existing business expenses with `cash`:
+# Back up first
+mysqldump -u splitledger_app -p splitledger \
+  > /var/backups/splitledger/splitledger-pre-upgrade-$(date +%Y%m%d).sql
 
-```bash
-npm run db:migrate-ledger-features
-```
-
-Start the app again:
-
-```bash
-sudo systemctl restart splitledger
-sudo systemctl status splitledger
-curl http://127.0.0.1:3001/api/health/db
-```
-
-After signing in, confirm older business entries still appear and Cash/KPay balances look correct.
-
-## 19. Update To A Later Release
-
-For a later release branch, follow the same backup-first pattern:
-
-```bash
-cd /var/www/splitledger
-sudo systemctl stop splitledger
 git fetch origin
 git switch RELEASE_BRANCH
 git pull --ff-only origin RELEASE_BRANCH
@@ -563,14 +463,15 @@ npm install
 npm run typecheck
 npm test
 npm run build
-docker compose --env-file /etc/splitledger/splitledger.env up -d mongo
+
 sudo systemctl restart splitledger
 sudo systemctl status splitledger
+curl http://127.0.0.1:3001/api/health/db
 ```
 
-If the later release includes a migration or backfill script, run it after `npm run build` and before restarting the app.
+Schema changes are applied automatically on startup via `CREATE TABLE IF NOT EXISTS` migrations.
 
-## 20. Useful Commands
+## 18. Useful Commands
 
 App logs:
 
@@ -578,11 +479,10 @@ App logs:
 journalctl -u splitledger -f
 ```
 
-Mongo logs:
+MySQL logs:
 
 ```bash
-cd /var/www/splitledger
-docker compose --env-file /etc/splitledger/splitledger.env logs -f mongo
+sudo journalctl -u mysql -f
 ```
 
 Restart app:
@@ -612,12 +512,12 @@ Expected public listeners:
 Expected private listeners:
 
 - `127.0.0.1:3001`
-- `127.0.0.1:27017`
+- `127.0.0.1:3306`
 
-## 21. Production Rules
+## 19. Production Rules
 
-- Never commit `.env`, `.env.local`, or real passwords.
-- Never expose MongoDB port `27017` publicly.
+- Never commit `.env` or real passwords.
+- Never expose MySQL port `3306` publicly.
 - Keep `APP_ORIGIN` exactly equal to the public HTTPS origin.
 - Run backups on a schedule.
 - Test restores before relying on backups.
