@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
-  buildAccessibleExpenseFilter,
-  buildVisibleExpenseFilter,
+  buildAccessibleExpenseWhere,
+  buildVisibleExpenseWhere,
   canAccessExpense
 } from "../lib/server/expense-access.ts"
 
@@ -16,14 +16,13 @@ test("personal records are only visible to the owner", () => {
 })
 
 test("visible expense filter includes business and owned personal records", () => {
-  assert.deepEqual(buildVisibleExpenseFilter("user-a"), {
-    $or: [{ type: "business" }, { type: "personal", ownerUserId: "user-a" }]
-  })
+  const { clause, params } = buildVisibleExpenseWhere("user-a")
+  assert.equal(clause, "(type = 'business' OR (type = 'personal' AND owner_user_id = ?))")
+  assert.deepEqual(params, ["user-a"])
 })
 
-test("accessible expense filter scopes delete/read by id and user visibility", () => {
-  assert.deepEqual(buildAccessibleExpenseFilter("expense-1", "user-a"), {
-    id: "expense-1",
-    $or: [{ type: "business" }, { type: "personal", ownerUserId: "user-a" }]
-  })
+test("accessible expense filter scopes by id and user visibility", () => {
+  const { clause, params } = buildAccessibleExpenseWhere("expense-1", "user-a")
+  assert.equal(clause, "id = ? AND (type = 'business' OR (type = 'personal' AND owner_user_id = ?))")
+  assert.deepEqual(params, ["expense-1", "user-a"])
 })

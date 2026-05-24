@@ -1,7 +1,7 @@
 import {
   clearLoginAttempts,
   countRecentLoginAttempts,
-  ensureAuthIndexes,
+  pruneOldLoginAttempts,
   recordLoginAttempt
 } from "@/lib/server/auth-repository"
 
@@ -13,13 +13,12 @@ export async function checkLoginRateLimit(request: Request, email: string): Prom
   key: string
   retryAfterSeconds: number
 }> {
-  await ensureAuthIndexes()
-
   const key = createLoginAttemptKey(request, email)
-  const attempts = await countRecentLoginAttempts({
-    key,
-    since: new Date(Date.now() - WINDOW_MS)
-  })
+  const since = new Date(Date.now() - WINDOW_MS)
+
+  await pruneOldLoginAttempts(since)
+
+  const attempts = await countRecentLoginAttempts({ key, since })
 
   return {
     allowed: attempts < MAX_LOGIN_ATTEMPTS,
