@@ -22,19 +22,24 @@ export async function getMysqlPool(): Promise<Pool> {
 }
 
 function createPool(): Pool {
-  const host = process.env.MYSQL_HOST ?? "127.0.0.1"
-  const port = parseInt(process.env.MYSQL_PORT ?? "3306", 10)
   const user = process.env.MYSQL_USER
   const password = process.env.MYSQL_PASSWORD
   const database = process.env.MYSQL_DB
+  const socketPath = process.env.MYSQL_SOCKET
 
   if (!user || !password || !database) {
     throw new Error("MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DB are required.")
   }
 
+  const transport = socketPath
+    ? { socketPath }
+    : {
+        host: process.env.MYSQL_HOST ?? "127.0.0.1",
+        port: parseInt(process.env.MYSQL_PORT ?? "3306", 10)
+      }
+
   return mysql.createPool({
-    host,
-    port,
+    ...transport,
     user,
     password,
     database,
