@@ -2,14 +2,16 @@
 
 import { useState } from "react"
 import { Logo } from "@/components/logo"
-import { demoCredentials, users } from "@/lib/mock-data"
+import { translate, type Language } from "@/lib/i18n"
 import type { User } from "@/lib/types"
 
 interface LoginScreenProps {
+  language: Language
+  onLanguageChange: (language: Language) => void
   onLogin: (user: User) => Promise<void>
 }
 
-export function LoginScreen({ onLogin }: LoginScreenProps) {
+export function LoginScreen({ language, onLanguageChange, onLogin }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -41,39 +43,34 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-8">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-sm lg:grid-cols-[1fr_420px]">
-        <div className="bg-[var(--surface-muted)] p-6 sm:p-8 lg:p-10">
+    <main className="grid min-h-screen place-items-center px-4 py-6">
+      <section className="w-full max-w-sm rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm sm:max-w-md sm:p-5">
+        <div className="mb-5 flex items-center justify-between gap-4">
           <Logo />
-          <h1 className="mt-10 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl">
-            Shared business costs, private personal spending.
-          </h1>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <Metric label="Business" value="Shared" />
-            <Metric label="Personal" value="Private" />
-            <Metric label="Access" value="Both" />
-          </div>
+          <LanguageToggle language={language} onChange={onLanguageChange} />
         </div>
 
-        <div className="p-6 sm:p-8">
-          <h2 className="text-xl font-semibold">Sign in</h2>
-          <form action={handleSubmit} autoComplete="off" className="mt-6 space-y-4">
+        <div>
+          <div>
+            <h1 className="text-xl font-semibold">{translate(language, "signIn")}</h1>
+          </div>
+          <form action={handleSubmit} className="mt-4 space-y-3">
             <label className="block space-y-1 text-sm font-medium">
-              <span>Email</span>
+              <span>{translate(language, "email")}</span>
               <input
-                autoComplete="off"
-                className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+                autoComplete="email"
+                className="h-10 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
                 name="email"
-                placeholder="aurora@example.com"
+                placeholder="you@example.com"
                 required
                 type="email"
               />
             </label>
             <label className="block space-y-1 text-sm font-medium">
-              <span>Password</span>
+              <span>{translate(language, "password")}</span>
               <input
-                autoComplete="new-password"
-                className="h-11 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
+                autoComplete="current-password"
+                className="h-10 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
                 name="password"
                 required
                 type="password"
@@ -85,54 +82,44 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               </div>
             ) : null}
             <button
-              className="h-11 w-full rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-10 w-full rounded-md bg-[var(--business)] px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? translate(language, "signingIn") : translate(language, "signIn")}
             </button>
           </form>
 
-          <div className="mt-6 rounded-lg border border-[var(--line)] p-4">
-            <div className="mb-3 text-sm font-semibold">Demo accounts</div>
-            <div className="space-y-3">
-              {demoCredentials.map((credential) => (
-                <DemoAccount credential={credential} key={credential.userId} />
-              ))}
-            </div>
-          </div>
+          <p className="mt-6 text-sm text-[var(--muted)]">
+            {translate(language, "accountAccessNotice")}
+          </p>
         </div>
       </section>
     </main>
   )
 }
 
-interface DemoAccountProps {
-  credential: {
-    userId: string
-    email: string
-    password: string
-  }
-}
-
-function DemoAccount({ credential }: DemoAccountProps) {
-  const user = users.find((item) => item.id === credential.userId)
+function LanguageToggle({
+  language,
+  onChange
+}: {
+  language: Language
+  onChange: (language: Language) => void
+}) {
+  const nextLanguage = language === "en" ? "my" : "en"
+  const label = language === "en" ? "EN" : "မြန်"
+  const nextLabel = nextLanguage === "en" ? "English" : "မြန်မာ"
 
   return (
-    <div className="rounded-md bg-[var(--surface-muted)] p-3 text-sm">
-      <div className="font-medium">{user?.name ?? credential.email}</div>
-      <div className="mt-1 text-[var(--muted)]">{credential.email}</div>
-      <div className="text-[var(--muted)]">{credential.password}</div>
-    </div>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-[var(--surface)] p-4">
-      <div className="text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
-      <div className="mt-2 text-lg font-semibold">{value}</div>
-    </div>
+    <button
+      aria-label={`Switch language to ${nextLabel}`}
+      className="grid h-10 min-w-14 place-items-center rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-semibold hover:bg-[var(--surface-muted)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
+      onClick={() => onChange(nextLanguage)}
+      title={`Switch to ${nextLabel}`}
+      type="button"
+    >
+      {label}
+    </button>
   )
 }
 

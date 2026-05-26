@@ -1,10 +1,10 @@
 # SplitLedger - Full Plan
 
 ## Overview
-SplitLedger is a mobile-first expense tracking web app for two users (you and your brother).
+SplitLedger is a mobile-first transaction tracking web app for three users.
 
-- Shared **Business expenses**
-- Separate **Personal expenses**
+- Shared **Business transactions**
+- Separate **Personal transactions**
 - Individual login accounts
 - Real-time balance calculation
 
@@ -134,9 +134,9 @@ Fields:
 
 ## Tech Stack
 
-- Next.js
-- Supabase (auth + database)
-- Tailwind CSS
+- Next.js 15 App Router
+- MySQL + `mysql2` (no ORM)
+- Tailwind CSS 4
 - PWA support
 
 ---
@@ -175,4 +175,3 @@ Start simple:
 5. Balance calculation
 
 Then improve.
-

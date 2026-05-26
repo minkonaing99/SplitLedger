@@ -3,6 +3,7 @@ node_modules/
 
 # Next.js
 .next/
+.next-stale-*/
 out/
 
 # production builds
@@ -30,8 +31,16 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# local database artifacts
+backups/
+*.archive
+*.dump
+
 # hosting and tooling
 .vercel/
+
+# Claude Code
+CLAUDE.md
 
 # OS and editor files
 .DS_Store

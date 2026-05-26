@@ -1,28 +1,20 @@
-import type { DemoCredential, Expense, User } from "./types"
+import type { Expense, User } from "./types"
 
 export const users: User[] = [
   {
-    id: "aurora",
-    name: "Aurora",
-    email: "aurora@example.com"
+    id: "t_khant_naing",
+    name: "T Khant Naing",
+    email: "tkhantnaing@example.com"
   },
   {
-    id: "brother",
-    name: "Brother",
-    email: "brother@example.com"
-  }
-]
-
-export const demoCredentials: DemoCredential[] = [
-  {
-    userId: "aurora",
-    email: "aurora@example.com",
-    password: "split1234"
+    id: "htet_myat_naing",
+    name: "Htet Myat Naing",
+    email: "htetmyatnaing@example.com"
   },
   {
-    userId: "brother",
-    email: "brother@example.com",
-    password: "brother1234"
+    id: "mg_mg",
+    name: "Mg Mg",
+    email: "mgmg@example.com"
   }
 ]
 
@@ -31,9 +23,10 @@ export const initialExpenses: Expense[] = [
     id: "exp-1",
     type: "business",
     kind: "expense",
+    paymentMethod: "cash",
     amount: 128,
-    paidByUserId: "aurora",
-    ownerUserId: "aurora",
+    paidByUserId: "t_khant_naing",
+    ownerUserId: "t_khant_naing",
     date: "2026-05-04",
     note: "Packaging supplies"
   },
@@ -41,9 +34,10 @@ export const initialExpenses: Expense[] = [
     id: "exp-2",
     type: "business",
     kind: "expense",
+    paymentMethod: "kpay",
     amount: 64,
-    paidByUserId: "brother",
-    ownerUserId: "brother",
+    paidByUserId: "htet_myat_naing",
+    ownerUserId: "htet_myat_naing",
     date: "2026-05-03",
     note: "Fuel for delivery"
   },
@@ -52,8 +46,8 @@ export const initialExpenses: Expense[] = [
     type: "personal",
     kind: "expense",
     amount: 18.5,
-    paidByUserId: "aurora",
-    ownerUserId: "aurora",
+    paidByUserId: "t_khant_naing",
+    ownerUserId: "t_khant_naing",
     date: "2026-05-04",
     note: "Lunch"
   },
@@ -62,8 +56,8 @@ export const initialExpenses: Expense[] = [
     type: "personal",
     kind: "expense",
     amount: 11.25,
-    paidByUserId: "brother",
-    ownerUserId: "brother",
+    paidByUserId: "htet_myat_naing",
+    ownerUserId: "htet_myat_naing",
     date: "2026-05-02",
     note: "Coffee"
   },
@@ -72,8 +66,8 @@ export const initialExpenses: Expense[] = [
     type: "personal",
     kind: "expense",
     amount: 42,
-    paidByUserId: "aurora",
-    ownerUserId: "aurora",
+    paidByUserId: "t_khant_naing",
+    ownerUserId: "t_khant_naing",
     date: "2026-05-01",
     note: "Phone top-up"
   },
@@ -82,8 +76,8 @@ export const initialExpenses: Expense[] = [
     type: "personal",
     kind: "expense",
     amount: 27.75,
-    paidByUserId: "brother",
-    ownerUserId: "brother",
+    paidByUserId: "mg_mg",
+    ownerUserId: "mg_mg",
     date: "2026-05-04",
     note: "Dinner"
   }

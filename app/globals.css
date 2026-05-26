@@ -26,6 +26,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--text);
+  overscroll-behavior-y: contain;
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
@@ -39,4 +40,48 @@ textarea {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+body {
+  font-size: 0.9375rem;
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: 0.9375rem;
+}
+
+.text-xs {
+  font-size: 0.6875rem;
+}
+
+.text-sm {
+  font-size: 0.8125rem;
+}
+
+.text-base {
+  font-size: 0.9375rem;
+}
+
+.text-lg {
+  font-size: 1rem;
+}
+
+.text-xl {
+  font-size: 1.125rem;
+}
+
+.text-2xl {
+  font-size: 1.375rem;
+}
+
+.text-3xl {
+  font-size: 1.75rem;
+}
+
+.text-4xl {
+  font-size: 2rem;
 }

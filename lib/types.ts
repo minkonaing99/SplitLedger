@@ -1,5 +1,6 @@
 export type ExpenseType = "business" | "personal"
-export type TransactionKind = "expense" | "income"
+export type TransactionKind = "expense" | "income" | "transfer"
+export type PaymentMethod = "cash" | "kpay"
 
 export interface User {
   id: string
@@ -7,16 +8,13 @@ export interface User {
   email: string
 }
 
-export interface DemoCredential {
-  userId: string
-  email: string
-  password: string
-}
-
 export interface Expense {
   id: string
   type: ExpenseType
   kind: TransactionKind
+  paymentMethod?: PaymentMethod
+  transferFromPaymentMethod?: PaymentMethod
+  transferToPaymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string
@@ -27,6 +25,9 @@ export interface Expense {
 export interface ExpenseInput {
   type: ExpenseType
   kind: TransactionKind
+  paymentMethod?: PaymentMethod
+  transferFromPaymentMethod?: PaymentMethod
+  transferToPaymentMethod?: PaymentMethod
   amount: number
   paidByUserId: string
   ownerUserId: string
@@ -40,3 +41,23 @@ export interface DashboardTotals {
   personalMonth: number
   businessCount: number
 }
+
+export interface MonthlyClose {
+  id: string
+  monthKey: string
+  cashOpeningBalance: number
+  kpayOpeningBalance: number
+  cashClosingBalance: number
+  kpayClosingBalance: number
+  incomeTotal: number
+  expenseTotal: number
+  transferTotal: number
+  transactionCount: number
+  closedByUserId: string
+  closedAt: string
+}
+
+export type MonthlyCloseSnapshot = Omit<
+  MonthlyClose,
+  "closedAt" | "closedByUserId" | "id"
+>
