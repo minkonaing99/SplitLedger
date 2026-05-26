@@ -1,9 +1,9 @@
-import type { Collection, WithId } from "mongodb"
+import type { RowDataPacket, ResultSetHeader } from "mysql2/promise"
 import {
-  buildAccessibleExpenseFilter,
-  buildVisibleExpenseFilter
+  buildAccessibleExpenseWhere,
+  buildVisibleExpenseWhere
 } from "@/lib/server/expense-access"
-import { getMongoConnection } from "@/lib/server/mongodb"
+import { getMysqlPool } from "@/lib/server/mysql"
 import type {
   Expense,
   ExpenseInput,
@@ -14,174 +14,149 @@ import type {
 
 const DEFAULT_WORKSPACE_ID = "family-business"
 
-interface ExpenseDocument {
+interface ExpenseRow extends RowDataPacket {
   id: string
-  workspaceId: string
+  workspace_id: string
   type: ExpenseType
-  kind?: TransactionKind
-  paymentMethod?: PaymentMethod
-  transferFromPaymentMethod?: PaymentMethod
-  transferToPaymentMethod?: PaymentMethod
+  kind: TransactionKind
+  payment_method: PaymentMethod | null
+  transfer_from_payment_method: PaymentMethod | null
+  transfer_to_payment_method: PaymentMethod | null
   amount: number
-  paidByUserId: string
-  ownerUserId: string
+  paid_by_user_id: string
+  owner_user_id: string
   date: string
   note: string
-  createdAt: Date
-  updatedAt: Date
-}
-
-interface ExpenseAuditDocument {
-  id: string
-  action: "create" | "delete"
-  actorUserId: string
-  expense: Expense
-  expenseId: string
-  workspaceId: string
-  createdAt: Date
+  created_at: Date
+  updated_at: Date
 }
 
 export async function listVisibleExpenses(userId: string): Promise<Expense[]> {
-  const collection = await getExpensesCollection()
-  const documents = await collection
-    .find({
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      ...buildVisibleExpenseFilter(userId)
-    })
-    .sort({ date: -1, createdAt: -1 })
-    .toArray()
-
-  return documents.map(toExpense)
+  const pool = await getMysqlPool()
+  const { clause, params } = buildVisibleExpenseWhere(userId)
+  const [rows] = await pool.execute<ExpenseRow[]>(
+    `SELECT * FROM expenses
+     WHERE workspace_id = ? AND ${clause}
+     ORDER BY date DESC, created_at DESC`,
+    [DEFAULT_WORKSPACE_ID, ...params]
+  )
+  return rows.map(toExpense)
 }
 
 export async function listBusinessExpenses(): Promise<Expense[]> {
-  const collection = await getExpensesCollection()
-  const documents = await collection
-    .find({ workspaceId: DEFAULT_WORKSPACE_ID, type: "business" })
-    .sort({ date: -1, createdAt: -1 })
-    .toArray()
-
-  return documents.map(toExpense)
+  const pool = await getMysqlPool()
+  const [rows] = await pool.execute<ExpenseRow[]>(
+    `SELECT * FROM expenses
+     WHERE workspace_id = ? AND type = 'business'
+     ORDER BY date DESC, created_at DESC`,
+    [DEFAULT_WORKSPACE_ID]
+  )
+  return rows.map(toExpense)
 }
 
 export async function insertExpense(input: ExpenseInput): Promise<Expense> {
-  const collection = await getExpensesCollection()
-  const now = new Date()
-  const expense: Expense = {
-    ...input,
-    id: crypto.randomUUID()
+  const pool = await getMysqlPool()
+  const connection = await pool.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    const now = new Date()
+    const expense: Expense = { ...input, id: crypto.randomUUID() }
+
+    await connection.execute<ResultSetHeader>(
+      `INSERT INTO expenses
+         (id, workspace_id, type, kind, payment_method,
+          transfer_from_payment_method, transfer_to_payment_method,
+          amount, paid_by_user_id, owner_user_id, date, note, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        expense.id, DEFAULT_WORKSPACE_ID, expense.type, expense.kind,
+        expense.paymentMethod ?? null,
+        expense.transferFromPaymentMethod ?? null,
+        expense.transferToPaymentMethod ?? null,
+        expense.amount, expense.paidByUserId, expense.ownerUserId,
+        expense.date, expense.note, now, now
+      ]
+    )
+
+    await connection.execute<ResultSetHeader>(
+      `INSERT INTO expense_audits
+         (id, workspace_id, expense_id, action, actor_user_id, expense_json, created_at)
+       VALUES (?, ?, ?, 'create', ?, ?, ?)`,
+      [crypto.randomUUID(), DEFAULT_WORKSPACE_ID, expense.id, input.paidByUserId, JSON.stringify(expense), now]
+    )
+
+    await connection.commit()
+    return expense
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
   }
-
-  await collection.insertOne(omitUndefined({
-    ...expense,
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    createdAt: now,
-    updatedAt: now
-  }))
-  await insertExpenseAudit({
-    action: "create",
-    actorUserId: input.paidByUserId,
-    expense
-  })
-
-  return expense
 }
 
 export async function deleteExpense(expenseId: string, userId: string): Promise<boolean> {
-  const collection = await getExpensesCollection()
-  const expense = await collection.findOne({
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    ...buildAccessibleExpenseFilter(expenseId, userId)
-  })
+  const pool = await getMysqlPool()
+  const connection = await pool.getConnection()
 
-  if (!expense) {
-    return false
+  try {
+    await connection.beginTransaction()
+
+    const { clause, params } = buildAccessibleExpenseWhere(expenseId, userId)
+
+    const [rows] = await connection.execute<ExpenseRow[]>(
+      `SELECT * FROM expenses WHERE workspace_id = ? AND ${clause}`,
+      [DEFAULT_WORKSPACE_ID, ...params]
+    )
+
+    const row = rows[0]
+    if (!row) {
+      await connection.rollback()
+      return false
+    }
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      `DELETE FROM expenses WHERE workspace_id = ? AND ${clause}`,
+      [DEFAULT_WORKSPACE_ID, ...params]
+    )
+
+    if (result.affectedRows === 1) {
+      await connection.execute<ResultSetHeader>(
+        `INSERT INTO expense_audits
+           (id, workspace_id, expense_id, action, actor_user_id, expense_json, created_at)
+         VALUES (?, ?, ?, 'delete', ?, ?, ?)`,
+        [crypto.randomUUID(), DEFAULT_WORKSPACE_ID, expenseId, userId, JSON.stringify(toExpense(row)), new Date()]
+      )
+    }
+
+    await connection.commit()
+    return result.affectedRows === 1
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
   }
-
-  const result = await collection.deleteOne({
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    ...buildAccessibleExpenseFilter(expenseId, userId)
-  })
-
-  if (result.deletedCount === 1) {
-    await insertExpenseAudit({
-      action: "delete",
-      actorUserId: userId,
-      expense: toExpense(expense)
-    })
-  }
-
-  return result.deletedCount === 1
 }
 
 export async function ensureExpenseIndexes(): Promise<void> {
-  const collection = await getExpensesCollection()
-
-  await Promise.all([
-    collection.createIndex({ workspaceId: 1, type: 1, date: -1 }),
-    collection.createIndex({ workspaceId: 1, type: 1, kind: 1, date: -1 }),
-    collection.createIndex({ workspaceId: 1, type: 1, paymentMethod: 1, date: -1 }),
-    collection.createIndex({ workspaceId: 1, ownerUserId: 1, type: 1, date: -1 }),
-    collection.createIndex({ id: 1 }, { unique: true }),
-    ensureExpenseAuditIndexes()
-  ])
+  // Indexes are managed by schema migrations in lib/server/db/migrations.ts
 }
 
-async function getExpensesCollection(): Promise<Collection<ExpenseDocument>> {
-  const { db } = await getMongoConnection()
-  return db.collection<ExpenseDocument>("expenses")
-}
-
-function omitUndefined<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
-  ) as T
-}
-
-function toExpense(document: WithId<ExpenseDocument>): Expense {
+function toExpense(row: ExpenseRow): Expense {
   return {
-    id: document.id,
-    type: document.type,
-    kind: document.kind ?? "expense",
-    paymentMethod: document.type === "business" ? document.paymentMethod ?? "cash" : undefined,
-    transferFromPaymentMethod: document.transferFromPaymentMethod,
-    transferToPaymentMethod: document.transferToPaymentMethod,
-    amount: document.amount,
-    paidByUserId: document.paidByUserId,
-    ownerUserId: document.ownerUserId,
-    date: document.date,
-    note: document.note
+    id: row.id,
+    type: row.type,
+    kind: row.kind,
+    paymentMethod: row.payment_method ?? undefined,
+    transferFromPaymentMethod: row.transfer_from_payment_method ?? undefined,
+    transferToPaymentMethod: row.transfer_to_payment_method ?? undefined,
+    amount: row.amount,
+    paidByUserId: row.paid_by_user_id,
+    ownerUserId: row.owner_user_id,
+    date: row.date,
+    note: row.note
   }
-}
-
-async function insertExpenseAudit(input: {
-  action: ExpenseAuditDocument["action"]
-  actorUserId: string
-  expense: Expense
-}): Promise<void> {
-  const collection = await getExpenseAuditsCollection()
-
-  await collection.insertOne({
-    id: crypto.randomUUID(),
-    action: input.action,
-    actorUserId: input.actorUserId,
-    expense: input.expense,
-    expenseId: input.expense.id,
-    workspaceId: DEFAULT_WORKSPACE_ID,
-    createdAt: new Date()
-  })
-}
-
-async function ensureExpenseAuditIndexes(): Promise<void> {
-  const collection = await getExpenseAuditsCollection()
-
-  await Promise.all([
-    collection.createIndex({ workspaceId: 1, expenseId: 1, createdAt: -1 }),
-    collection.createIndex({ workspaceId: 1, actorUserId: 1, createdAt: -1 })
-  ])
-}
-
-async function getExpenseAuditsCollection(): Promise<Collection<ExpenseAuditDocument>> {
-  const { db } = await getMongoConnection()
-  return db.collection<ExpenseAuditDocument>("expenseAudits")
 }

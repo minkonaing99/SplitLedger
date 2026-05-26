@@ -1,7 +1,7 @@
 import {
   clearLoginAttempts,
   countRecentLoginAttempts,
-  ensureAuthIndexes,
+  pruneOldLoginAttempts,
   recordLoginAttempt
 } from "@/lib/server/auth-repository"
 
@@ -13,13 +13,12 @@ export async function checkLoginRateLimit(request: Request, email: string): Prom
   key: string
   retryAfterSeconds: number
 }> {
-  await ensureAuthIndexes()
-
   const key = createLoginAttemptKey(request, email)
-  const attempts = await countRecentLoginAttempts({
-    key,
-    since: new Date(Date.now() - WINDOW_MS)
-  })
+  const since = new Date(Date.now() - WINDOW_MS)
+
+  await pruneOldLoginAttempts(since)
+
+  const attempts = await countRecentLoginAttempts({ key, since })
 
   return {
     allowed: attempts < MAX_LOGIN_ATTEMPTS,
@@ -42,11 +41,20 @@ function createLoginAttemptKey(request: Request, email: string): string {
 }
 
 function getClientIpAddress(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for")
-
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() ?? "unknown"
+  // Prefer x-real-ip (set by nginx/trusted proxy, not forwardable by clients).
+  // Fall back to the last segment of x-forwarded-for, which is appended by
+  // the outermost proxy — unlike the first segment, it cannot be forged by
+  // the client when a reverse proxy is in front.
+  const realIp = request.headers.get("x-real-ip")
+  if (realIp) {
+    return realIp.trim()
   }
 
-  return request.headers.get("x-real-ip") ?? "unknown"
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  if (forwardedFor) {
+    const segments = forwardedFor.split(",")
+    return segments[segments.length - 1]?.trim() ?? "unknown"
+  }
+
+  return "unknown"
 }

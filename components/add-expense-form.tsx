@@ -199,7 +199,7 @@ export function AddExpenseForm({
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        {[50000, 100000, 2000000, 500000, 1000000].map((quickAmount) => (
+        {[50000, 100000, 500000, 1000000, 2000000].map((quickAmount) => (
           <button
             className="h-8 rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!isOnline}
@@ -243,7 +243,16 @@ export function AddExpenseForm({
         />
       </label>
       {!isOnline ? (
-        <div className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm font-medium text-[var(--muted)]">
+        <div className="flex items-center gap-2 rounded-md bg-[oklch(0.96_0.06_80)] px-3 py-2 text-sm font-medium text-[oklch(0.42_0.14_60)]">
+          <svg aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <line x1="1" x2="23" y1="1" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" x2="12.01" y1="20" y2="20" />
+          </svg>
           {translate(language, "offlineReadOnly")}
         </div>
       ) : null}

@@ -1,24 +1,19 @@
 import { NextResponse } from "next/server"
-import { getMongoConnection } from "@/lib/server/mongodb"
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise"
+import { getMysqlPool } from "@/lib/server/mysql"
 import { validateTrustedOrigin } from "@/lib/server/security"
 
 const SMOKE_TEST_WORKSPACE_ID = "health-smoke-test"
 
 export async function GET() {
   try {
-    const { db } = await getMongoConnection()
-    await db.command({ ping: 1 })
+    const pool = await getMysqlPool()
+    await pool.execute("SELECT 1")
 
-    return NextResponse.json({
-      ok: true,
-      database: db.databaseName
-    })
-  } catch (error: unknown) {
+    return NextResponse.json({ ok: true })
+  } catch {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unable to connect to MongoDB."
-      },
+      { ok: false, error: "Unable to connect to the database." },
       { status: 500 }
     )
   }
@@ -41,45 +36,41 @@ export async function POST(request: Request) {
     )
   }
 
-  const smokeId = `smoke-${crypto.randomUUID()}`
+  const smokeId = crypto.randomUUID()
 
   try {
-    const { db } = await getMongoConnection()
-    const collection = db.collection("expenses")
+    const pool = await getMysqlPool()
     const now = new Date()
 
-    await collection.insertOne({
-      id: smokeId,
-      workspaceId: SMOKE_TEST_WORKSPACE_ID,
-      type: "business",
-      kind: "expense",
-      amount: 1,
-      paidByUserId: "health-check",
-      ownerUserId: "health-check",
-      date: now.toISOString().slice(0, 10),
-      note: "Temporary database smoke test",
-      createdAt: now,
-      updatedAt: now
-    })
+    await pool.execute(
+      `INSERT INTO expenses
+         (id, workspace_id, type, kind, amount, paid_by_user_id, owner_user_id, date, note, created_at, updated_at)
+       VALUES (?, ?, 'business', 'expense', 1, 'health-check', 'health-check', ?, 'Temporary database smoke test', ?, ?)`,
+      [smokeId, SMOKE_TEST_WORKSPACE_ID, now.toISOString().slice(0, 10), now, now]
+    )
 
-    const inserted = await collection.findOne({ id: smokeId })
-    const deleteResult = await collection.deleteOne({ id: smokeId })
+    interface SmokeRow extends RowDataPacket { id: string }
+    const [rows] = await pool.execute<SmokeRow[]>(
+      "SELECT id FROM expenses WHERE id = ?",
+      [smokeId]
+    )
+
+    const [deleteResult] = await pool.execute<ResultSetHeader>(
+      "DELETE FROM expenses WHERE id = ?",
+      [smokeId]
+    )
 
     return NextResponse.json({
-      ok: Boolean(inserted) && deleteResult.deletedCount === 1,
-      database: db.databaseName,
+      ok: Boolean(rows[0]) && deleteResult.affectedRows === 1,
       checks: {
         ping: true,
-        insert: Boolean(inserted),
-        delete: deleteResult.deletedCount === 1
+        insert: Boolean(rows[0]),
+        delete: deleteResult.affectedRows === 1
       }
     })
-  } catch (error: unknown) {
+  } catch {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unable to run database smoke test."
-      },
+      { ok: false, error: "Unable to run database smoke test." },
       { status: 500 }
     )
   }

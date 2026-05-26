@@ -2,7 +2,11 @@
 
 import { useEffect } from "react"
 
-export function PwaRegister() {
+interface PwaRegisterProps {
+  nonce: string
+}
+
+export function PwaRegister({ nonce }: PwaRegisterProps) {
   useEffect(() => {
     if (!("serviceWorker" in navigator) || process.env.NODE_ENV !== "production") {
       return
@@ -17,7 +21,7 @@ export function PwaRegister() {
     }
 
     void registerServiceWorker()
-  }, [])
+  }, [nonce])
 
   return null
 }

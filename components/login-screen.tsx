@@ -54,14 +54,14 @@ export function LoginScreen({ language, onLanguageChange, onLogin }: LoginScreen
           <div>
             <h1 className="text-xl font-semibold">{translate(language, "signIn")}</h1>
           </div>
-          <form action={handleSubmit} autoComplete="off" className="mt-4 space-y-3">
+          <form action={handleSubmit} className="mt-4 space-y-3">
             <label className="block space-y-1 text-sm font-medium">
               <span>{translate(language, "email")}</span>
               <input
-                autoComplete="off"
+                autoComplete="email"
                 className="h-10 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
                 name="email"
-                placeholder="tkhantnaing@example.com"
+                placeholder="you@example.com"
                 required
                 type="email"
               />
@@ -69,7 +69,7 @@ export function LoginScreen({ language, onLanguageChange, onLogin }: LoginScreen
             <label className="block space-y-1 text-sm font-medium">
               <span>{translate(language, "password")}</span>
               <input
-                autoComplete="new-password"
+                autoComplete="current-password"
                 className="h-10 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 outline-none focus:border-[var(--business)]"
                 name="password"
                 required
@@ -82,7 +82,7 @@ export function LoginScreen({ language, onLanguageChange, onLogin }: LoginScreen
               </div>
             ) : null}
             <button
-              className="h-10 w-full rounded-md bg-[var(--text)] px-4 text-sm font-semibold text-[var(--surface)] hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-10 w-full rounded-md bg-[var(--business)] px-4 text-sm font-semibold text-white hover:opacity-90 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSubmitting}
               type="submit"
             >

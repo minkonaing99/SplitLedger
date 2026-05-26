@@ -238,8 +238,16 @@ export function AppShell() {
 
   if (isBooting) {
     return (
-      <main className="grid min-h-screen place-items-center px-4 text-sm text-[var(--muted)]">
-        {translate(language, "loadingSecureSession")}
+      <main className="grid min-h-screen place-items-center px-4">
+        <div className="flex flex-col items-center gap-4">
+          <Logo />
+          <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
+            <svg aria-hidden="true" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            {translate(language, "loadingSecureSession")}
+          </div>
+        </div>
       </main>
     )
   }
@@ -378,22 +386,43 @@ export function AppShell() {
         <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
           <Stack>
             {error ? (
-              <div className="rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm font-medium text-[var(--danger)]">
+              <div className="flex items-center gap-2 rounded-md bg-[var(--danger-soft)] px-3 py-2 text-sm font-medium text-[var(--danger)]">
+                <svg aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M15 9l-6 6" />
+                  <path d="M9 9l6 6" />
+                </svg>
                 {error}
               </div>
             ) : null}
             {notice ? (
-              <div className="rounded-md bg-[var(--success-soft)] px-3 py-2 text-sm font-medium text-[var(--success)]">
+              <div className="flex items-center gap-2 rounded-md bg-[var(--success-soft)] px-3 py-2 text-sm font-medium text-[var(--success)]">
+                <svg aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9 12l2 2 4-4" />
+                </svg>
                 {notice}
               </div>
             ) : null}
             {!isOnline ? (
-              <div className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm font-medium text-[var(--muted)]">
+              <div className="flex items-center gap-2 rounded-md bg-[oklch(0.96_0.06_80)] px-3 py-2 text-sm font-medium text-[oklch(0.42_0.14_60)]">
+                <svg aria-hidden="true" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <line x1="1" x2="23" y1="1" y2="23" />
+                  <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                  <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                  <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+                  <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                  <line x1="12" x2="12.01" y1="20" y2="20" />
+                </svg>
                 {translate(language, "offlineReadOnly")}
               </div>
             ) : null}
             {isLoadingExpenses ? (
-              <div className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+              <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
+                <svg aria-hidden="true" className="size-4 shrink-0 animate-spin" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
                 {translate(language, "loadingExpenses")}
               </div>
             ) : (
@@ -420,8 +449,11 @@ export function AppShell() {
         <RightSummary
           businessCount={totals.businessCount}
           businessTotal={totals.businessMonth}
+          isOnline={isOnline}
           language={language}
+          monthCount={visibleExpenses.filter((e) => e.date.startsWith(new Date().toISOString().slice(0, 7))).length}
           personalTotal={totals.personalMonth}
+          today={totals.today}
         />
       </aside>
 
@@ -464,7 +496,7 @@ function renderView({
   if (activeView === "business") {
     const businessExpenses = expenses.filter((expense) => expense.type === "business")
     return (
-      <Stack>
+      <Stack size="lg">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
             detail={translate(language, "businessNet")}
@@ -516,7 +548,7 @@ function renderView({
   if (activeView === "personal") {
     const personalExpenses = visibleExpenses.filter((expense) => expense.type === "personal")
     return (
-      <Stack>
+      <Stack size="lg">
         <div className="grid gap-3 sm:grid-cols-3">
           <SummaryCard
             detail={translate(language, "personalNet")}
@@ -609,7 +641,7 @@ function HomeView({
   const monthOutflow = sumExpenseOutflow(monthTransactions)
 
   return (
-    <Stack>
+    <Stack size="lg">
       <DashboardHero
         income={monthIncome}
         language={language}
@@ -626,11 +658,15 @@ function HomeView({
           detail={translate(language, "sharedLedger")}
           label={translate(language, "business")}
           onClick={() => onChangeView("business")}
+          tone="business"
+          value={formatCompactCurrency(totals.businessMonth)}
         />
         <HomeAction
           detail={translate(language, "personalNet")}
           label={translate(language, "personal")}
           onClick={() => onChangeView("personal")}
+          tone="personal"
+          value={formatCompactCurrency(totals.personalMonth)}
         />
       </section>
 
@@ -708,6 +744,7 @@ function DashboardHero({
               label={translate(language, "todayMovement")}
               tone={today >= 0 ? "success" : "danger"}
               value={formatCompactCurrency(today)}
+              variant="ghost"
             />
           </div>
         </div>
@@ -742,16 +779,21 @@ function DashboardHero({
 function MiniMetric({
   label,
   tone,
-  value
+  value,
+  variant = "filled"
 }: {
   label: string
   tone: "danger" | "success"
   value: string
+  variant?: "filled" | "ghost"
 }) {
   const toneClassName = tone === "success" ? "text-[var(--success)]" : "text-[var(--danger)]"
+  const containerClassName = variant === "ghost"
+    ? "rounded-md border border-[var(--line)] p-3"
+    : "rounded-md bg-[var(--surface-muted)] p-3"
 
   return (
-    <div className="rounded-md bg-[var(--surface-muted)] p-3">
+    <div className={containerClassName}>
       <div className="text-xs font-semibold uppercase text-[var(--muted)]">{label}</div>
       <div className={`mt-1 text-base font-semibold ${toneClassName}`}>{value}</div>
     </div>
@@ -761,19 +803,30 @@ function MiniMetric({
 function HomeAction({
   detail,
   label,
-  onClick
+  onClick,
+  tone,
+  value
 }: {
   detail: string
   label: string
   onClick: () => void
+  tone?: "business" | "personal"
+  value?: string
 }) {
+  const valueColor = tone === "business" ? "text-[var(--business)]" : "text-[var(--personal)]"
+
   return (
     <button
       className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 text-left shadow-sm transition-colors hover:bg-[var(--surface-muted)] focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--business)]"
       onClick={onClick}
       type="button"
     >
-      <div className="text-sm font-semibold">{label}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-semibold">{label}</div>
+        {value !== undefined ? (
+          <div className={`text-sm font-semibold ${valueColor}`}>{value}</div>
+        ) : null}
+      </div>
       <div className="mt-1 text-sm text-[var(--muted)]">{detail}</div>
     </button>
   )
@@ -935,7 +988,7 @@ function formatMonthLabel(monthKey: string, language: Language = "en"): string {
 }
 
 function getFilterButtonClassName(isActive: boolean): string {
-  const base = "h-8 rounded px-2 text-xs font-semibold transition-colors sm:px-3"
+  const base = "h-8 rounded px-1.5 text-xs font-semibold transition-colors sm:px-3"
   const state = isActive
     ? "bg-[var(--surface)] text-[var(--text)] shadow-sm"
     : "text-[var(--muted)] hover:text-[var(--text)]"
@@ -1164,18 +1217,29 @@ function Panel({
 function RightSummary({
   businessCount,
   businessTotal,
+  isOnline,
   language,
-  personalTotal
+  monthCount,
+  personalTotal,
+  today
 }: {
   businessCount: number
   businessTotal: number
+  isOnline: boolean
   language: Language
+  monthCount: number
   personalTotal: number
+  today: number
 }) {
+  const todayColor = today >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
+
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-base font-semibold">{translate(language, "sharedLedger")}</h2>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          {businessCount} {translate(language, businessCount === 1 ? "record" : "records")}
+        </p>
       </div>
       <SummaryCard
         label={translate(language, "businessMonth")}
@@ -1187,12 +1251,43 @@ function RightSummary({
         tone="personal"
         value={formatCurrency(personalTotal)}
       />
+      <div className="border-t border-[var(--line)] pt-5 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold uppercase text-[var(--muted)]">
+            {translate(language, "todayMovement")}
+          </span>
+          <span className={`text-sm font-semibold ${todayColor}`}>
+            {today >= 0 ? "+" : ""}{formatCompactCurrency(today)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold uppercase text-[var(--muted)]">
+            {translate(language, "monthTransactions")}
+          </span>
+          <span className="text-sm font-semibold">{monthCount}</span>
+        </div>
+      </div>
+      {!isOnline ? (
+        <div className="flex items-center gap-2 rounded-md bg-[oklch(0.96_0.06_80)] px-3 py-2 text-xs font-medium text-[oklch(0.42_0.14_60)]">
+          <svg aria-hidden="true" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <line x1="1" x2="23" y1="1" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" x2="12.01" y1="20" y2="20" />
+          </svg>
+          {translate(language, "offlineReadOnly")}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function Stack({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-4 sm:space-y-5">{children}</div>
+function Stack({ children, size = "md" }: { children: React.ReactNode; size?: "sm" | "md" | "lg" }) {
+  const className = size === "sm" ? "space-y-3" : size === "lg" ? "space-y-5 sm:space-y-6" : "space-y-4 sm:space-y-5"
+  return <div className={className}>{children}</div>
 }
 
 function getNavigationClassName(isActive: boolean, mobile: boolean): string {
