@@ -1,76 +1,31 @@
+import { mkdir, writeFile, unlink } from "node:fs/promises"
+import { join } from "node:path"
 import { NextResponse } from "next/server"
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise"
-import { getMysqlPool } from "@/lib/server/mysql"
-import { validateTrustedOrigin } from "@/lib/server/security"
 
-const SMOKE_TEST_WORKSPACE_ID = "health-smoke-test"
+const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "data")
 
 export async function GET() {
   try {
-    const pool = await getMysqlPool()
-    await pool.execute("SELECT 1")
-
-    return NextResponse.json({ ok: true })
+    await mkdir(DATA_DIR, { recursive: true })
+    return NextResponse.json({ ok: true, storage: "json", dataDir: DATA_DIR })
   } catch {
     return NextResponse.json(
-      { ok: false, error: "Unable to connect to the database." },
+      { ok: false, error: "Unable to access data directory." },
       { status: 500 }
     )
   }
 }
 
-export async function POST(request: Request) {
-  const originError = validateTrustedOrigin(request)
-
-  if (originError) {
-    return originError
-  }
-
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Database smoke test is disabled in production."
-      },
-      { status: 403 }
-    )
-  }
-
-  const smokeId = crypto.randomUUID()
-
+export async function POST() {
+  const testFile = join(DATA_DIR, `smoke-test-${Date.now()}.tmp`)
   try {
-    const pool = await getMysqlPool()
-    const now = new Date()
-
-    await pool.execute(
-      `INSERT INTO expenses
-         (id, workspace_id, type, kind, amount, paid_by_user_id, owner_user_id, date, note, created_at, updated_at)
-       VALUES (?, ?, 'business', 'expense', 1, 'health-check', 'health-check', ?, 'Temporary database smoke test', ?, ?)`,
-      [smokeId, SMOKE_TEST_WORKSPACE_ID, now.toISOString().slice(0, 10), now, now]
-    )
-
-    interface SmokeRow extends RowDataPacket { id: string }
-    const [rows] = await pool.execute<SmokeRow[]>(
-      "SELECT id FROM expenses WHERE id = ?",
-      [smokeId]
-    )
-
-    const [deleteResult] = await pool.execute<ResultSetHeader>(
-      "DELETE FROM expenses WHERE id = ?",
-      [smokeId]
-    )
-
-    return NextResponse.json({
-      ok: Boolean(rows[0]) && deleteResult.affectedRows === 1,
-      checks: {
-        ping: true,
-        insert: Boolean(rows[0]),
-        delete: deleteResult.affectedRows === 1
-      }
-    })
+    await mkdir(DATA_DIR, { recursive: true })
+    await writeFile(testFile, "ok", "utf-8")
+    await unlink(testFile)
+    return NextResponse.json({ ok: true, checks: { write: true, delete: true } })
   } catch {
     return NextResponse.json(
-      { ok: false, error: "Unable to run database smoke test." },
+      { ok: false, error: "Data directory is not writable." },
       { status: 500 }
     )
   }

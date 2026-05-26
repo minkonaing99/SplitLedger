@@ -1,33 +1,19 @@
-import type { RowDataPacket, ResultSetHeader } from "mysql2/promise"
-import { getMysqlPool } from "@/lib/server/mysql"
+import { readDb, updateDb } from "@/lib/server/json-db"
 import type { MonthlyClose, MonthlyCloseSnapshot } from "@/lib/types"
 
 const DEFAULT_WORKSPACE_ID = "family-business"
 
-interface MonthlyCloseRow extends RowDataPacket {
-  id: string
-  workspace_id: string
-  month_key: string
-  cash_opening_balance: number
-  kpay_opening_balance: number
-  cash_closing_balance: number
-  kpay_closing_balance: number
-  income_total: number
-  expense_total: number
-  transfer_total: number
-  transaction_count: number
-  closed_by_user_id: string
-  closed_at: Date
-  updated_at: Date
+interface MonthlyCloseRecord extends MonthlyClose {
+  workspaceId: string
+  updatedAt: string
 }
 
 export async function listMonthlyCloses(): Promise<MonthlyClose[]> {
-  const pool = await getMysqlPool()
-  const [rows] = await pool.execute<MonthlyCloseRow[]>(
-    "SELECT * FROM monthly_closes WHERE workspace_id = ? ORDER BY month_key DESC",
-    [DEFAULT_WORKSPACE_ID]
-  )
-  return rows.map(toMonthlyClose)
+  const all = await readDb<MonthlyCloseRecord>("monthly-closes.json")
+  return all
+    .filter(m => m.workspaceId === DEFAULT_WORKSPACE_ID)
+    .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+    .map(toMonthlyClose)
 }
 
 export async function upsertMonthlyClose({
@@ -37,79 +23,61 @@ export async function upsertMonthlyClose({
   closedByUserId: string
   snapshot: MonthlyCloseSnapshot
 }): Promise<MonthlyClose> {
-  const pool = await getMysqlPool()
-  const connection = await pool.getConnection()
+  let result: MonthlyClose | undefined
 
-  try {
-    await connection.beginTransaction()
-
-    const now = new Date()
-    const newId = crypto.randomUUID()
-
-    await connection.execute<ResultSetHeader>(
-      `INSERT INTO monthly_closes
-         (id, workspace_id, month_key, cash_opening_balance, kpay_opening_balance,
-          cash_closing_balance, kpay_closing_balance, income_total, expense_total,
-          transfer_total, transaction_count, closed_by_user_id, closed_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         cash_opening_balance = VALUES(cash_opening_balance),
-         kpay_opening_balance = VALUES(kpay_opening_balance),
-         cash_closing_balance = VALUES(cash_closing_balance),
-         kpay_closing_balance = VALUES(kpay_closing_balance),
-         income_total         = VALUES(income_total),
-         expense_total        = VALUES(expense_total),
-         transfer_total       = VALUES(transfer_total),
-         transaction_count    = VALUES(transaction_count),
-         closed_by_user_id    = VALUES(closed_by_user_id),
-         closed_at            = VALUES(closed_at),
-         updated_at           = VALUES(updated_at)`,
-      [
-        newId, DEFAULT_WORKSPACE_ID, snapshot.monthKey,
-        snapshot.cashOpeningBalance, snapshot.kpayOpeningBalance,
-        snapshot.cashClosingBalance, snapshot.kpayClosingBalance,
-        snapshot.incomeTotal, snapshot.expenseTotal, snapshot.transferTotal,
-        snapshot.transactionCount, closedByUserId, now, now
-      ]
+  await updateDb<MonthlyCloseRecord>("monthly-closes.json", records => {
+    const now = new Date().toISOString()
+    const existing = records.find(
+      r => r.workspaceId === DEFAULT_WORKSPACE_ID && r.monthKey === snapshot.monthKey
     )
 
-    const [rows] = await connection.execute<MonthlyCloseRow[]>(
-      "SELECT * FROM monthly_closes WHERE workspace_id = ? AND month_key = ?",
-      [DEFAULT_WORKSPACE_ID, snapshot.monthKey]
-    )
-
-    await connection.commit()
-
-    if (!rows[0]) {
-      throw new Error("Unable to close month.")
+    const record: MonthlyCloseRecord = {
+      id: existing?.id ?? crypto.randomUUID(),
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      monthKey: snapshot.monthKey,
+      cashOpeningBalance: snapshot.cashOpeningBalance,
+      kpayOpeningBalance: snapshot.kpayOpeningBalance,
+      cashClosingBalance: snapshot.cashClosingBalance,
+      kpayClosingBalance: snapshot.kpayClosingBalance,
+      incomeTotal: snapshot.incomeTotal,
+      expenseTotal: snapshot.expenseTotal,
+      transferTotal: snapshot.transferTotal,
+      transactionCount: snapshot.transactionCount,
+      closedByUserId,
+      closedAt: existing?.closedAt ?? now,
+      updatedAt: now
     }
 
-    return toMonthlyClose(rows[0])
-  } catch (error) {
-    await connection.rollback()
-    throw error
-  } finally {
-    connection.release()
-  }
+    result = toMonthlyClose(record)
+
+    if (existing) {
+      return records.map(r =>
+        r.workspaceId === DEFAULT_WORKSPACE_ID && r.monthKey === snapshot.monthKey ? record : r
+      )
+    }
+
+    return [...records, record]
+  })
+
+  if (!result) throw new Error("Unable to close month.")
+  return result
 }
 
-export async function ensureMonthlyCloseIndexes(): Promise<void> {
-  // Indexes are managed by schema migrations in lib/server/db/migrations.ts
-}
+export async function ensureMonthlyCloseIndexes(): Promise<void> {}
 
-function toMonthlyClose(row: MonthlyCloseRow): MonthlyClose {
+function toMonthlyClose(record: MonthlyCloseRecord): MonthlyClose {
   return {
-    id: row.id,
-    monthKey: row.month_key,
-    cashOpeningBalance: row.cash_opening_balance,
-    kpayOpeningBalance: row.kpay_opening_balance,
-    cashClosingBalance: row.cash_closing_balance,
-    kpayClosingBalance: row.kpay_closing_balance,
-    incomeTotal: row.income_total,
-    expenseTotal: row.expense_total,
-    transferTotal: row.transfer_total,
-    transactionCount: row.transaction_count,
-    closedByUserId: row.closed_by_user_id,
-    closedAt: row.closed_at.toISOString()
+    id: record.id,
+    monthKey: record.monthKey,
+    cashOpeningBalance: record.cashOpeningBalance,
+    kpayOpeningBalance: record.kpayOpeningBalance,
+    cashClosingBalance: record.cashClosingBalance,
+    kpayClosingBalance: record.kpayClosingBalance,
+    incomeTotal: record.incomeTotal,
+    expenseTotal: record.expenseTotal,
+    transferTotal: record.transferTotal,
+    transactionCount: record.transactionCount,
+    closedByUserId: record.closedByUserId,
+    closedAt: record.closedAt
   }
 }

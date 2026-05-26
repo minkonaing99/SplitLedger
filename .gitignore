@@ -36,6 +36,9 @@ backups/
 *.archive
 *.dump
 
+# JSON data store (user data — never commit)
+data/
+
 # hosting and tooling
 .vercel/
 

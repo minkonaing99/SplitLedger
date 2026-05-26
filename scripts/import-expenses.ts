@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs"
-import mysql from "mysql2/promise"
+import { readFileSync, existsSync } from "node:fs"
+import { readFile, writeFile, mkdir } from "node:fs/promises"
+import { join } from "node:path"
 
 const INPUT_FILE = process.argv[2]
 
@@ -7,18 +8,10 @@ if (!INPUT_FILE) {
   console.error("Usage: npx tsx scripts/import-expenses.ts <path-to-expenses.json>")
   process.exit(1)
 }
-const WORKSPACE_ID = "family-business"
 
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST ?? "127.0.0.1",
-  port: parseInt(process.env.MYSQL_PORT ?? "3306", 10),
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DB,
-  waitForConnections: true,
-  connectionLimit: 5,
-  timezone: "+00:00"
-})
+const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "data")
+const EXPENSES_FILE = join(DATA_DIR, "expenses.json")
+const WORKSPACE_ID = "family-business"
 
 function resolvePaymentMethod(note: string, type: string, kind: string): string | null {
   if (type !== "business" || kind === "transfer") return null
@@ -29,7 +22,14 @@ const lines = readFileSync(INPUT_FILE, "utf8")
   .split("\n")
   .filter(line => line.trim().length > 0)
 
-let inserted = 0
+await mkdir(DATA_DIR, { recursive: true })
+
+const existing: unknown[] = existsSync(EXPENSES_FILE)
+  ? (JSON.parse(await readFile(EXPENSES_FILE, "utf-8")) as unknown[])
+  : []
+
+const existingIds = new Set((existing as { id: string }[]).map(e => e.id))
+const toInsert: unknown[] = []
 let skipped = 0
 
 for (const line of lines) {
@@ -46,42 +46,34 @@ for (const line of lines) {
     updatedAt: { $date: string }
   }
 
+  if (existingIds.has(doc.id)) {
+    skipped++
+    continue
+  }
+
   const kind = doc.kind ?? "expense"
   const paymentMethod = resolvePaymentMethod(doc.note, doc.type, kind)
-  const createdAt = new Date(doc.createdAt.$date)
-  const updatedAt = new Date(doc.updatedAt.$date)
 
-  const [result] = await pool.execute<mysql.ResultSetHeader>(
-    `INSERT INTO expenses
-       (id, workspace_id, type, kind, payment_method,
-        transfer_from_payment_method, transfer_to_payment_method,
-        amount, paid_by_user_id, owner_user_id, date, note, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       type             = VALUES(type),
-       kind             = VALUES(kind),
-       payment_method   = VALUES(payment_method),
-       amount           = VALUES(amount),
-       paid_by_user_id  = VALUES(paid_by_user_id),
-       owner_user_id    = VALUES(owner_user_id),
-       date             = VALUES(date),
-       note             = VALUES(note),
-       updated_at       = VALUES(updated_at)`,
-    [
-      doc.id, WORKSPACE_ID, doc.type, kind, paymentMethod,
-      doc.amount, doc.paidByUserId, doc.ownerUserId,
-      doc.date, doc.note, createdAt, updatedAt
-    ]
-  )
+  toInsert.push({
+    id: doc.id,
+    workspaceId: WORKSPACE_ID,
+    type: doc.type,
+    kind,
+    paymentMethod,
+    transferFromPaymentMethod: null,
+    transferToPaymentMethod: null,
+    amount: doc.amount,
+    paidByUserId: doc.paidByUserId,
+    ownerUserId: doc.ownerUserId,
+    date: doc.date,
+    note: doc.note,
+    createdAt: new Date(doc.createdAt.$date).toISOString(),
+    updatedAt: new Date(doc.updatedAt.$date).toISOString()
+  })
 
-  if (result.affectedRows === 1) {
-    inserted++
-    const pm = paymentMethod ? ` [${paymentMethod}]` : ""
-    console.log(`  + ${doc.date} ${doc.type}/${doc.kind} ${doc.amount.toLocaleString()} — ${doc.note}${pm}`)
-  } else {
-    skipped++
-  }
+  const pm = paymentMethod ? ` [${paymentMethod}]` : ""
+  console.log(`  + ${doc.date} ${doc.type}/${kind} ${doc.amount.toLocaleString()} — ${doc.note}${pm}`)
 }
 
-await pool.end()
-console.log(`\nDone: ${inserted} inserted, ${skipped} already existed.`)
+await writeFile(EXPENSES_FILE, JSON.stringify([...existing, ...toInsert], null, 2), "utf-8")
+console.log(`\nDone: ${toInsert.length} inserted, ${skipped} already existed.`)
