@@ -8,7 +8,7 @@ const staticHeaders: ReadonlyArray<[string, string]> = [
 ]
 
 export function middleware(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64")
+  const nonce = btoa(crypto.randomUUID())
   const csp = buildContentSecurityPolicy(nonce)
 
   // Forward nonce to the layout so Next.js applies it to its own hydration scripts.
