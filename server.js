@@ -3,10 +3,9 @@ import { parse } from "node:url"
 import next from "next"
 
 const dev = process.env.NODE_ENV !== "production"
-const hostname = process.env.HOSTNAME ?? "localhost"
 const port = parseInt(process.env.PORT ?? "3000", 10)
 
-const app = next({ dev, hostname, port })
+const app = next({ dev, hostname: "localhost", port })
 const handle = app.getRequestHandler()
 
 await app.prepare()
@@ -21,5 +20,5 @@ createServer(async (req, res) => {
     res.end("internal server error")
   }
 }).listen(port, () => {
-  console.log(`> Ready on http://${hostname}:${port}`)
+  console.log(`> Ready on http://localhost:${port}`)
 })
