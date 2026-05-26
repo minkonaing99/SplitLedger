@@ -41,11 +41,20 @@ function createLoginAttemptKey(request: Request, email: string): string {
 }
 
 function getClientIpAddress(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for")
-
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() ?? "unknown"
+  // Prefer x-real-ip (set by nginx/trusted proxy, not forwardable by clients).
+  // Fall back to the last segment of x-forwarded-for, which is appended by
+  // the outermost proxy — unlike the first segment, it cannot be forged by
+  // the client when a reverse proxy is in front.
+  const realIp = request.headers.get("x-real-ip")
+  if (realIp) {
+    return realIp.trim()
   }
 
-  return request.headers.get("x-real-ip") ?? "unknown"
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  if (forwardedFor) {
+    const segments = forwardedFor.split(",")
+    return segments[segments.length - 1]?.trim() ?? "unknown"
+  }
+
+  return "unknown"
 }

@@ -10,16 +10,10 @@ export async function GET() {
     const pool = await getMysqlPool()
     await pool.execute("SELECT 1")
 
-    return NextResponse.json({
-      ok: true,
-      database: process.env.MYSQL_DB
-    })
-  } catch (error: unknown) {
+    return NextResponse.json({ ok: true })
+  } catch {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unable to connect to MySQL."
-      },
+      { ok: false, error: "Unable to connect to the database." },
       { status: 500 }
     )
   }
@@ -68,19 +62,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: Boolean(rows[0]) && deleteResult.affectedRows === 1,
-      database: process.env.MYSQL_DB,
       checks: {
         ping: true,
         insert: Boolean(rows[0]),
         delete: deleteResult.affectedRows === 1
       }
     })
-  } catch (error: unknown) {
+  } catch {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unable to run database smoke test."
-      },
+      { ok: false, error: "Unable to run database smoke test." },
       { status: 500 }
     )
   }

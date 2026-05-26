@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs"
 import mysql from "mysql2/promise"
 
-const INPUT_FILE = "/Users/aurora/Downloads/expenses/expenses.json"
+const INPUT_FILE = process.argv[2]
+
+if (!INPUT_FILE) {
+  console.error("Usage: npx tsx scripts/import-expenses.ts <path-to-expenses.json>")
+  process.exit(1)
+}
 const WORKSPACE_ID = "family-business"
 
 const pool = mysql.createPool({
