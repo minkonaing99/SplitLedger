@@ -3,6 +3,29 @@ import { join } from "node:path"
 
 const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "data")
 
+const DATA_FILES = [
+  "users.json",
+  "sessions.json",
+  "login-attempts.json",
+  "expenses.json",
+  "expense-audits.json",
+  "monthly-closes.json"
+]
+
+export async function initDataStore(): Promise<void> {
+  await mkdir(DATA_DIR, { recursive: true })
+  await Promise.all(
+    DATA_FILES.map(async filename => {
+      const filepath = join(DATA_DIR, filename)
+      try {
+        await readFile(filepath)
+      } catch {
+        await writeFile(filepath, "[]", "utf-8")
+      }
+    })
+  )
+}
+
 // Serialize writes per file to prevent interleaved async operations
 const queue = new Map<string, Promise<void>>()
 
